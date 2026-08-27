@@ -83,6 +83,19 @@ public final class Commands {
                         .then(literal("aimoffset").then(argument("bloques", DoubleArgumentType.doubleArg(-5, 5))
                                 .executes(c -> aimOffset(c.getSource(),
                                         DoubleArgumentType.getDouble(c, "bloques")))))
+                        .then(literal("autozoom")
+                                .then(argument("activo", BoolArgumentType.bool())
+                                        .executes(c -> autoZoom(c.getSource(),
+                                                BoolArgumentType.getBool(c, "activo"))))
+                                .then(literal("dist").then(argument("bloques", DoubleArgumentType.doubleArg(4, 200))
+                                        .executes(c -> autoZoomDistance(c.getSource(),
+                                                DoubleArgumentType.getDouble(c, "bloques")))))
+                                .then(literal("max").then(argument("factor", DoubleArgumentType.doubleArg(1, 10))
+                                        .executes(c -> autoZoomMax(c.getSource(),
+                                                (float) DoubleArgumentType.getDouble(c, "factor")))))
+                                .then(literal("speed").then(argument("valor", IntegerArgumentType.integer(0, 100))
+                                        .executes(c -> autoZoomSpeed(c.getSource(),
+                                                IntegerArgumentType.getInteger(c, "valor"))))))
                         .then(literal("auto").then(argument("activo", BoolArgumentType.bool())
                                 .executes(c -> auto(c.getSource(), BoolArgumentType.getBool(c, "activo")))))
                         .then(literal("info").executes(c -> info(c.getSource())))
@@ -299,6 +312,51 @@ public final class Commands {
         return 1;
     }
 
+    private static int autoZoom(FabricClientCommandSource source, boolean enabled) {
+        CameraDirector director = CameraDirector.get();
+        director.settings().autoZoom = enabled;
+        director.saveSettings();
+        if (enabled && director.target().kind() == TargetTracker.Kind.NINGUNO) {
+            source.sendFeedback(Text.literal(
+                            "Zoom automatico activado, pero no hay objetivo: usa /tvcam ball o /tvcam lock")
+                    .formatted(Formatting.YELLOW));
+            return 1;
+        }
+        source.sendFeedback(Text.literal(enabled
+                        ? String.format("Zoom automatico activado (x1 a %.0f bloques, tope x%.1f)",
+                        director.settings().autoZoomDistance, director.settings().autoZoomMax)
+                        : "Zoom automatico desactivado")
+                .formatted(enabled ? Formatting.GREEN : Formatting.GRAY));
+        return 1;
+    }
+
+    private static int autoZoomDistance(FabricClientCommandSource source, double blocks) {
+        CameraDirector.get().settings().autoZoomDistance = blocks;
+        CameraDirector.get().settings().normalized();
+        CameraDirector.get().saveSettings();
+        source.sendFeedback(Text.literal(String.format(
+                        "El zoom automatico se queda en x1 a %.0f bloques; mas lejos, aprieta", blocks))
+                .formatted(Formatting.AQUA));
+        return 1;
+    }
+
+    private static int autoZoomMax(FabricClientCommandSource source, float factor) {
+        CameraDirector.get().settings().autoZoomMax = factor;
+        CameraDirector.get().settings().normalized();
+        CameraDirector.get().saveSettings();
+        source.sendFeedback(Text.literal(String.format("Tope del zoom automatico: x%.1f", factor))
+                .formatted(Formatting.AQUA));
+        return 1;
+    }
+
+    private static int autoZoomSpeed(FabricClientCommandSource source, int value) {
+        CameraDirector.get().settings().autoZoomSpeed = value;
+        CameraDirector.get().saveSettings();
+        source.sendFeedback(Text.literal("Velocidad del zoom automatico: " + value + "/100")
+                .formatted(Formatting.AQUA));
+        return 1;
+    }
+
     private static int info(FabricClientCommandSource source) {
         CameraDirector director = CameraDirector.get();
         TVCamSettings settings = director.settings();
@@ -312,6 +370,10 @@ public final class Commands {
                         + "\n  travelling: " + settings.transitionMillis + " ms"
                         + "\n  suavizado: " + settings.smoothing + "/100"
                         + "\n  objetivo: " + director.target().describe()
+                        + "\n  zoom automatico: " + (settings.autoZoom
+                        ? String.format("si (x1 a %.0f bloques, tope x%.1f, ahora x%.2f)",
+                        settings.autoZoomDistance, settings.autoZoomMax, director.autoZoomFactor())
+                        : "no")
                         + "\n  realizador automatico: " + (settings.autoDirector ? "si" : "no"))
                 .formatted(Formatting.GRAY));
         return 1;
@@ -336,6 +398,10 @@ public final class Commands {
                   /tvcam transition <ms>     duracion del travelling al cortar
                   /tvcam smooth <0-100>      pulso del camara al seguir
                   /tvcam ratio <2-10>        1 de cada N frames va a la emision
+                  /tvcam autozoom <true|false>  aprieta el zoom si la jugada se aleja
+                  /tvcam autozoom dist <n>      distancia a la que se queda en x1
+                  /tvcam autozoom max <n>       tope del zoom automatico
+                  /tvcam autozoom speed <0-100> lo rapido que se mueve
                   /tvcam auto <true|false>   realizador automatico
                   /tvcam info                resolucion y ajustes actuales
                 TECLAS: Numpad 1-9 cortan, 0 para, * crea, . abre la ventana,

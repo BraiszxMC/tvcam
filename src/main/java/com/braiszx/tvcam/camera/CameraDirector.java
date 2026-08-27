@@ -46,6 +46,9 @@ public final class CameraDirector {
     private float currentZoom = 1.0f;
     private boolean followInitialized;
     private long lastPoseNanos;
+    /** Distancia de la camara al objetivo en este frame, o -1 si no hay objetivo. */
+    private double aimDistance = -1.0;
+    private float autoZoomFactor = 1.0f;
 
     /** Travelling en curso al cambiar de camara. */
     private CameraPose transitionFrom;
@@ -217,7 +220,7 @@ public final class CameraDirector {
         deltaSeconds = Math.clamp(deltaSeconds, 0.0, 0.5);
 
         CameraPose desired = desiredPose(camera, tickDelta, deltaSeconds);
-        float zoom = camera.zoom();
+        float zoom = camera.zoom() * autoZoom(deltaSeconds);
 
         if (now < transitionEndNanos && transitionFrom != null) {
             float progress = (float) (now - transitionStartNanos)
@@ -239,17 +242,20 @@ public final class CameraDirector {
 
     private CameraPose desiredPose(CameraPoint camera, float tickDelta, double deltaSeconds) {
         CameraPose fixed = new CameraPose(camera.pos(), camera.yaw(), camera.pitch());
-        if (!camera.mode().needsTarget()) {
-            return fixed;
-        }
         Entity entity = target.resolve();
         if (entity == null) {
+            aimDistance = -1.0;
             // Sin objetivo, la camara se queda quieta donde la pusiste en vez de
             // ponerse a mirar al vacio.
             return fixed;
         }
         Vec3d aim = target.aimPoint(entity, tickDelta, settings().aimOffset);
         Vec3d eye = camera.mode() == CameraMode.ACOMPANAR ? aim.add(camera.offset()) : camera.pos();
+        // Se mide aunque la camara sea fija: el zoom automatico tambien le sirve.
+        aimDistance = eye.distanceTo(aim);
+        if (!camera.mode().needsTarget()) {
+            return fixed;
+        }
         CameraPose wanted = CameraPose.lookAt(eye, aim);
 
         if (!followInitialized) {
@@ -270,8 +276,39 @@ public final class CameraDirector {
                 MathHelper.lerp(blend, previous.pitch(), wanted.pitch()));
     }
 
+    /**
+     * Zoom automatico: aprieta cuando la jugada se aleja y se abre cuando se
+     * acerca, para que el objetivo se vea siempre parecido de grande. Se mueve
+     * despacio y con zona muerta, porque un zoom que persigue cada centimetro
+     * marea y no es lo que hace un camara de verdad.
+     */
+    private float autoZoom(double deltaSeconds) {
+        TVCamSettings config = settings();
+        if (!config.autoZoom || aimDistance < 0.0) {
+            autoZoomFactor = MathHelper.lerp(
+                    (float) (1.0 - Math.exp(-config.zoomResponse() * deltaSeconds)), autoZoomFactor, 1.0f);
+            return autoZoomFactor;
+        }
+        float wanted = (float) Math.clamp(aimDistance / config.autoZoomDistance, 1.0, config.autoZoomMax);
+        if (Math.abs(wanted - autoZoomFactor) > 0.02f) {
+            float blend = (float) (1.0 - Math.exp(-config.zoomResponse() * deltaSeconds));
+            autoZoomFactor = MathHelper.lerp(blend, autoZoomFactor, wanted);
+        }
+        return autoZoomFactor;
+    }
+
     public float currentZoom() {
         return currentZoom;
+    }
+
+    /** Cuanto esta apretando el zoom automatico ahora mismo. */
+    public float autoZoomFactor() {
+        return autoZoomFactor;
+    }
+
+    /** Distancia de la camara al objetivo, o -1 si no hay objetivo. */
+    public double aimDistance() {
+        return aimDistance;
     }
 
     // ------------------------------------------------------- realizador automatico

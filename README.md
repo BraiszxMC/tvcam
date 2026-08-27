@@ -97,6 +97,28 @@ ve la jugada: descarta las que tienen la pelota fuera de plano, prefiere una
 distancia de tele (ni pegada ni en la otra punta) y aguanta cada plano unos
 segundos para no marear. Con `/tvcam auto false` vuelves a cortar tu a mano.
 
+### Zoom automatico
+
+`/tvcam autozoom true` y la camara aprieta cuando la jugada se aleja y se abre
+cuando se acerca, para que la pelota se vea siempre parecida de grande. Es lo que
+hace un camara real en la banda.
+
+| Comando | Que hace | Por defecto |
+|---|---|---|
+| `/tvcam autozoom <true\|false>` | activarlo | apagado |
+| `/tvcam autozoom dist <bloques>` | distancia a la que se queda en x1; mas lejos, aprieta | 25 |
+| `/tvcam autozoom max <1-10>` | tope, para que no acabe mirando por una pajita | 3 |
+| `/tvcam autozoom speed <0-100>` | lo rapido que se mueve el zoom | 30 |
+
+Se mueve **despacio y con zona muerta**: no persigue cada centimetro de la pelota,
+porque un zoom nervioso marea y delata que lo lleva una maquina. Con `speed 10`
+queda de cine y con `speed 70` reacciona casi al momento. El automatico se
+multiplica por el zoom manual de la camara, asi que puedes tener una camara ya
+apretada de base que ademas se ajuste sola.
+
+Necesita objetivo (`/tvcam ball`) y funciona tambien en camaras `fija`: aunque no
+giren, aprietan cuando la jugada se va lejos.
+
 ---
 
 ## Como se usa

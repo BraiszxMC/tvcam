@@ -29,8 +29,11 @@ public final class Hud {
             context.drawTextWithShadow(client.textRenderer, live, 6, 6, RED);
 
             StringBuilder detail = new StringBuilder(camera.mode().name().toLowerCase());
-            if (camera.zoom() > 1.01f) {
-                detail.append(String.format("  ·  zoom x%.2f", camera.zoom()));
+            if (director.currentZoom() > 1.01f) {
+                detail.append(String.format("  ·  zoom x%.2f", director.currentZoom()));
+                if (director.settings().autoZoom && director.autoZoomFactor() > 1.01f) {
+                    detail.append(" auto");
+                }
             }
             if (camera.mode() != CameraMode.FIJA) {
                 detail.append("  ·  ").append(director.target().describe());
