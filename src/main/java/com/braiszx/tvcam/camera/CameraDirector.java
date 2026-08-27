@@ -672,11 +672,9 @@ public final class CameraDirector {
     public boolean presentToPlayerWindow(Framebuffer framebuffer) {
         try {
             if (previewFrame >= 0) {
-                // El monitor se recoge en el mismo punto del frame que la emision,
-                // que es donde el framebuffer lleva ya el mundo dibujado. Cogerlo
-                // antes daba monitores en negro.
-                previews.capture(previewFrame, framebuffer);
-                // Tu ventana repite tu ultima imagen para que no parpadee.
+                // El mundo ya se ha dibujado dentro del monitor: no hay nada que
+                // copiar. Tu ventana repite tu ultima imagen para que no parpadee.
+                previews.markDrawn(previewFrame);
                 return mirror.present();
             }
             selfTestPresent();
@@ -712,21 +710,15 @@ public final class CameraDirector {
         selfTestPresenting = value;
     }
 
+    /** Solo para la autoprueba: fuerza un frame de monitor para la camara dada. */
+    public void selfTestForcePreview(int index) {
+        previewFrame = index;
+    }
+
     /** Solo para la autoprueba: pinta los monitores de un color inconfundible. */
     public void selfTestPaintPreviews() {
         for (int i = 0; i < cameras().size(); i++) {
             previews.fillWithColor(i, 0xFF00FF66);
-        }
-    }
-
-    /** Solo para la autoprueba: mete el frame actual en todos los monitores. */
-    public void selfTestFillPreviews() {
-        Framebuffer framebuffer = MinecraftClient.getInstance().getFramebuffer();
-        if (framebuffer == null) {
-            return;
-        }
-        for (int i = 0; i < cameras().size(); i++) {
-            previews.capture(i, framebuffer);
         }
     }
 

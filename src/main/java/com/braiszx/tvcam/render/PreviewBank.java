@@ -17,10 +17,12 @@ import java.util.OptionalDouble;
 /**
  * Las miniaturas de cada camara para el multiviewer de la mesa.
  *
- * <p>Una miniatura no se puede "capturar" sin mas: el mundo hay que dibujarlo
- * desde esa camara. Por eso el realizador dedica de vez en cuando un frame a una
- * camara concreta, y aqui se guarda el resultado reducido. Cada camara se refresca
- * una vez cada pocas decimas, que para un monitor de control sobra.
+ * <p>Cada monitor es un framebuffer propio de 256x144 y el juego dibuja el mundo
+ * <b>directamente dentro de el</b>: en los frames de monitor se le da este destino
+ * en lugar del suyo. No hay ninguna copia de por medio, que es justo donde fallaba
+ * antes (la copia del juego respeta el canal alfa, y el render del mundo lo deja a
+ * cero, asi que no copiaba nada). Ademas sale mas barato: se renderiza a 256x144
+ * en vez de a pantalla completa.
  */
 public final class PreviewBank {
     /** Tamano de cada miniatura. Pequeno a proposito: son monitores de control. */
@@ -36,19 +38,16 @@ public final class PreviewBank {
         boolean hasImage;
     }
 
-    /** Se queda con la imagen del frame actual, reducida, para la camara indicada. */
-    public void capture(int index, Framebuffer source) {
-        Slot slot = slot(index);
-        if (slot.buffer == null) {
-            return;
+    /** El destino donde el juego debe dibujar el mundo para este monitor. */
+    public Framebuffer target(int index) {
+        return slot(index).buffer;
+    }
+
+    /** Se llama al acabar el frame de un monitor: ya lleva imagen. */
+    public void markDrawn(int index) {
+        if (index >= 0 && index < slots.size()) {
+            slots.get(index).hasImage = true;
         }
-        // Ojo con el sentido: framebuffer.drawBlit(destino) dibuja la textura DEL
-        // framebuffer DENTRO del destino. Es decir, hay que llamarlo sobre la
-        // imagen del juego pasandole el monitor, y no al reves. Al reves se pinta
-        // el monitor vacio encima del juego, que era el origen de la basura que
-        // salia en la emision.
-        source.drawBlit(slot.buffer.getColorAttachmentView());
-        slot.hasImage = true;
     }
 
     /** El framebuffer de un monitor, para poder inspeccionarlo en la autoprueba. */
@@ -89,7 +88,8 @@ public final class PreviewBank {
     private Slot create(int index) {
         Slot slot = new Slot();
         try {
-            slot.buffer = new SimpleFramebuffer("TVCam preview " + index, WIDTH, HEIGHT, false);
+            // Con profundidad: el mundo no se puede dibujar sin buffer de profundidad.
+            slot.buffer = new SimpleFramebuffer("TVCam preview " + index, WIDTH, HEIGHT, true);
             slot.id = Identifier.of(TVCam.MOD_ID, "preview/" + index);
             MinecraftClient.getInstance().getTextureManager()
                     .registerTexture(slot.id, new PreviewTexture(slot.buffer));

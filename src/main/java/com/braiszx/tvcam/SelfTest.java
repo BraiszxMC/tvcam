@@ -62,9 +62,6 @@ public final class SelfTest {
                 if ("color".equals(System.getenv("TVCAM_PREVIEW_TEST"))) {
                     CameraDirector.get().selfTestPaintPreviews();
                     TVCam.LOGGER.info("[selftest] monitores pintados de verde");
-                } else {
-                    CameraDirector.get().selfTestFillPreviews();
-                    TVCam.LOGGER.info("[selftest] monitores rellenados con el frame actual");
                 }
             } else if (ticks == 245) {
                 // Se vuelca un monitor a la ventana y se captura: asi se ve lo que

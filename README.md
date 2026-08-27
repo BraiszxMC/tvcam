@@ -84,11 +84,16 @@ abajo con una tecla por plano y piloto de tally rojo en el que esta al aire, y e
 panel de la camara seleccionada a la derecha.
 
 **Los monitores son imagen de verdad, no un icono.** Una miniatura no se puede
-"capturar": el mundo hay que dibujarlo desde esa camara. Por eso, mientras la mesa
-esta abierta, el realizador dedica **uno de cada cuatro frames** a refrescar el
-monitor de una camara, rotando entre todas. Cada monitor se renueva un par de
-veces por segundo a 256x144: son monitores de control, no la emision. Con la mesa
-cerrada no se gasta ni un frame en esto.
+"capturar": el mundo hay que dibujarlo desde esa camara. Mientras la mesa esta
+abierta, el realizador dedica **uno de cada cuatro frames** a una camara, rotando
+entre todas, y en ese frame **el juego dibuja el mundo directamente dentro del
+monitor**, a 256x144.
+
+Que se dibuje dentro y no se copie no es un detalle: la copia del juego respeta el
+canal alfa y el render del mundo lo deja a cero, asi que copiar daba monitores en
+negro. Ademas, al renderizar a 256x144 en lugar de a pantalla completa, un frame
+de monitor cuesta bastante menos que un frame normal. Con la mesa cerrada no se
+gasta ni un frame en esto.
 
 Un clic en un monitor lo selecciona para editarlo; **dos clics lo ponen al aire**,
 igual que las teclas del bus de programa o el numpad, que tambien funcionan con la

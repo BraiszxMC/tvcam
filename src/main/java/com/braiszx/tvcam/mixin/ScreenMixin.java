@@ -18,8 +18,16 @@ public class ScreenMixin {
     @Inject(method = "renderWithTooltip", at = @At("HEAD"), cancellable = true)
     private void tvcam$hideFromBroadcast(DrawContext context, int mouseX, int mouseY, float delta,
                                          CallbackInfo ci) {
-        if (CameraDirector.get().isBroadcastFrame()) {
-            ci.cancel();
+        CameraDirector director = CameraDirector.get();
+        if (!director.isBroadcastFrame()) {
+            return;
         }
+        // En la autoprueba no hay mundo que dibujar, asi que se deja pasar la
+        // pantalla en los frames de monitor: es la unica forma de comprobar aqui
+        // que el juego dibuja de verdad dentro del monitor.
+        if (director.isPreviewFrame() && "1".equals(System.getenv("TVCAM_SELFTEST"))) {
+            return;
+        }
+        ci.cancel();
     }
 }
