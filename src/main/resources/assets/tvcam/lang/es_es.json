@@ -15,5 +15,6 @@
   "key.tvcam.zoom_in": "Acercar zoom",
   "key.tvcam.zoom_out": "Alejar zoom",
   "key.tvcam.lock": "Marcar objetivo al que apuntas",
-  "key.tvcam.auto": "Realizador automatico"
+  "key.tvcam.auto": "Realizador automatico",
+  "key.tvcam.desk": "Abrir la mesa de realizacion"
 }

@@ -76,6 +76,49 @@ Montar una retransmision:
 
 Y ya esta: capturas la ventana `TVCam` en OBS y tienes un partido realizado.
 
+### La mesa de realizacion
+
+Tecla **M** (o `/tvcam desk`) y se abre la mesa: los planos a la izquierda, todos
+los ajustes de la camara elegida a la derecha, y los controles generales abajo.
+
+* Pulsa un plano para editarlo, o **cortar** para ponerlo al aire.
+* **La emision sigue saliendo con la mesa abierta**, y ninguna pantalla del juego
+  aparece en la emision: puedes tocar ajustes viendo el resultado en directo en la
+  ventana que captura OBS. Tampoco pausa la partida en un mundo propio.
+* Desde ahi se crea, renombra, duplica, reordena, recoloca y borra cada camara sin
+  escribir un solo comando.
+
+**El item que abre la mesa.** Si configuras `/tvcam wand minecraft:clock`, llevar
+ese item en la mano abre la mesa sola y guardarlo la cierra. Es un atajo comodo,
+pero **la tecla funciona siempre**: de espectador, sin inventario o si el servidor
+te limpia la mochila al entrar a la arena, que es justo cuando el item te dejaria
+tirado.
+
+**Con Stream Deck.** La mesa no hace falta: cada accion tiene su tecla (todas
+reasignables en los controles de Minecraft), asi que basta con configurar cada
+boton fisico con la tecla que quieras.
+
+### Cada camara con su propio objetivo
+
+Cada camara guarda **a quien sigue ella**, no lo que haga el resto:
+
+| Ajuste de la camara | Que hace |
+|---|---|
+| `general` | sigue al objetivo general de la retransmision (lo que marques con `/tvcam ball`) |
+| `pelota` | la pelota del campo activo, pase lo que pase con el objetivo general |
+| un jugador | ese jugador por nombre |
+| `nadie` | no sigue a nadie aunque este en modo seguir |
+
+Asi puedes tener a la vez la camara 1 barriendo la pelota, la 2 pegada a tu
+delantero y la 3 quieta en la grada. Se cambia en la mesa con el boton **Sigue a**
+(que va pasando por la pelota y por cada jugador conectado) o con
+`/tvcam target <n> ball|player <nombre>|global|none`.
+
+Ademas, cada camara puede llevar **su propio zoom, su propio zoom automatico y su
+propio pulso de seguimiento**, o dejarlos en `general` para heredar el ajuste
+comun. Una camara de banda con pulso lento y una de porteria con pulso rapido,
+cada una a su aire.
+
 **Modos de camara**
 
 | Modo | Que hace |

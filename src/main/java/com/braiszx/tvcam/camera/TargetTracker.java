@@ -43,6 +43,20 @@ public final class TargetTracker {
         return kind;
     }
 
+    public String playerName() {
+        return playerName;
+    }
+
+    /** Etiqueta corta para los botones de la mesa. */
+    public String shortLabel() {
+        return switch (kind) {
+            case NINGUNO -> "nadie";
+            case PELOTA -> "pelota";
+            case JUGADOR -> playerName == null ? "jugador" : playerName;
+            case ENTIDAD -> "marcado";
+        };
+    }
+
     public String describe() {
         return switch (kind) {
             case NINGUNO -> "sin objetivo";
@@ -82,7 +96,36 @@ public final class TargetTracker {
 
     // ------------------------------------------------------------- resolucion
 
-    /** La entidad a la que apuntan las camaras ahora mismo, o null. */
+    /**
+     * Resuelve el objetivo de <b>una</b> camara: si dice GLOBAL usa el objetivo
+     * general de la retransmision, y si no, el suyo propio.
+     */
+    public Entity resolve(TargetSpec spec) {
+        if (spec == null || spec.kind == TargetSpec.Kind.GLOBAL) {
+            return resolve();
+        }
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientWorld world = client.world;
+        if (world == null) {
+            return null;
+        }
+        return switch (spec.kind) {
+            case NINGUNO, GLOBAL -> null;
+            case PELOTA -> resolveBall(world, client);
+            case JUGADOR -> findPlayer(world, spec.player);
+        };
+    }
+
+    private Entity findPlayer(ClientWorld world, String name) {
+        if (name == null) {
+            return null;
+        }
+        return world.getPlayers().stream()
+                .filter(p -> name.equalsIgnoreCase(p.getGameProfile().name()))
+                .findFirst().orElse(null);
+    }
+
+    /** La entidad a la que apunta el objetivo general, o null. */
     public Entity resolve() {
         MinecraftClient client = MinecraftClient.getInstance();
         ClientWorld world = client.world;
@@ -90,9 +133,7 @@ public final class TargetTracker {
             return null;
         }
         return switch (kind) {
-            case JUGADOR -> world.getPlayers().stream()
-                    .filter(p -> p.getGameProfile().name().equalsIgnoreCase(playerName))
-                    .findFirst().orElse(null);
+            case JUGADOR -> findPlayer(world, playerName);
             case ENTIDAD -> valid(world.getEntityById(entityId));
             case PELOTA -> resolveBall(world, client);
             case NINGUNO -> null;

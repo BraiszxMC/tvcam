@@ -31,6 +31,12 @@ public final class TVCamSettings {
     /** Lo rapido que se mueve el zoom, 0 = muy lento y de cine, 100 = brusco. */
     public int autoZoomSpeed = 30;
 
+    /**
+     * Item que, al llevarlo en la mano, abre la mesa de realizacion solo.
+     * Vacio = desactivado. Ejemplo: "minecraft:clock".
+     */
+    public String wandItem = "";
+
     /** Realizador automatico: corta solo a la camara que mejor ve la jugada. */
     public boolean autoDirector = false;
     /** Segundos minimos que aguanta un plano antes de que el realizador corte a otro. */
@@ -61,9 +67,14 @@ public final class TVCamSettings {
     }
 
     public double followResponse() {
-        if (smoothing <= 0) {
+        return followResponse(smoothing);
+    }
+
+    /** Lo mismo, pero con el suavizado propio de una camara. */
+    public double followResponse(int value) {
+        if (value <= 0) {
             return Double.MAX_VALUE;
         }
-        return 12.0 * (1.0 - smoothing / 100.0) + 0.6;
+        return 12.0 * (1.0 - value / 100.0) + 0.6;
     }
 }

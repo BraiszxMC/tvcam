@@ -191,7 +191,7 @@ public final class CameraDirector {
         }
         List<CameraPoint> list = cameras();
         String finalName = (name == null || name.isBlank()) ? "Camara " + (list.size() + 1) : name;
-        CameraPoint point = CameraPoint.fixed(finalName,
+        CameraPoint point = CameraPoint.at(finalName,
                 new Vec3d(client.player.getX(), client.player.getEyeY(), client.player.getZ()),
                 client.player.getYaw(), client.player.getPitch());
         list.add(point);
@@ -225,6 +225,71 @@ public final class CameraDirector {
 
     public int activeIndex() {
         return active;
+    }
+
+    /** Trae la camara a donde estas, con tu mismo encuadre. */
+    public boolean moveHere(int index) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        CameraPoint camera = at(index);
+        if (camera == null || client.player == null) {
+            return false;
+        }
+        camera.moveTo(new Vec3d(client.player.getX(), client.player.getEyeY(), client.player.getZ()),
+                client.player.getYaw(), client.player.getPitch());
+        store.save();
+        return true;
+    }
+
+    /** Reapunta la camara sin moverla de sitio. */
+    public boolean aimHere(int index) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        CameraPoint camera = at(index);
+        if (camera == null || client.player == null) {
+            return false;
+        }
+        camera.aimAt(client.player.getYaw(), client.player.getPitch());
+        store.save();
+        return true;
+    }
+
+    public CameraPoint at(int index) {
+        List<CameraPoint> list = cameras();
+        return (index >= 0 && index < list.size()) ? list.get(index) : null;
+    }
+
+    public boolean duplicate(int index) {
+        CameraPoint camera = at(index);
+        if (camera == null) {
+            return false;
+        }
+        CameraPoint copy = camera.copy();
+        copy.name = camera.name() + " (2)";
+        cameras().add(index + 1, copy);
+        store.save();
+        return true;
+    }
+
+    /** Sube o baja una camara en la lista, que es la que mapea las teclas 1-9. */
+    public boolean move(int index, int direction) {
+        List<CameraPoint> list = cameras();
+        int destination = index + direction;
+        if (index < 0 || index >= list.size() || destination < 0 || destination >= list.size()) {
+            return false;
+        }
+        CameraPoint camera = list.remove(index);
+        list.add(destination, camera);
+        if (active == index) {
+            active = destination;
+        } else if (active == destination) {
+            active = index;
+        }
+        store.save();
+        return true;
+    }
+
+    /** Guarda los cambios hechos sobre una camara ya existente. */
+    public void touch() {
+        store.save();
     }
 
     public boolean replace(int index, CameraPoint camera) {
@@ -307,7 +372,7 @@ public final class CameraDirector {
         deltaSeconds = Math.clamp(deltaSeconds, 0.0, 0.5);
 
         CameraPose desired = desiredPose(camera, tickDelta, deltaSeconds);
-        float zoom = camera.zoom() * autoZoom(deltaSeconds);
+        float zoom = camera.zoom() * autoZoom(camera, deltaSeconds);
 
         if (now < transitionEndNanos && transitionFrom != null) {
             float progress = (float) (now - transitionStartNanos)
@@ -329,7 +394,7 @@ public final class CameraDirector {
 
     private CameraPose desiredPose(CameraPoint camera, float tickDelta, double deltaSeconds) {
         CameraPose fixed = new CameraPose(camera.pos(), camera.yaw(), camera.pitch());
-        Entity entity = target.resolve();
+        Entity entity = target.resolve(camera.target());
         if (entity == null) {
             aimDistance = -1.0;
             // Sin objetivo, la camara se queda quieta donde la pusiste en vez de
@@ -350,7 +415,9 @@ public final class CameraDirector {
             return wanted;
         }
 
-        double response = settings().followResponse();
+        double response = camera.smoothing != null
+                ? settings().followResponse(camera.smoothing)
+                : settings().followResponse();
         if (response == Double.MAX_VALUE) {
             return wanted;
         }
@@ -369,9 +436,10 @@ public final class CameraDirector {
      * despacio y con zona muerta, porque un zoom que persigue cada centimetro
      * marea y no es lo que hace un camara de verdad.
      */
-    private float autoZoom(double deltaSeconds) {
+    private float autoZoom(CameraPoint camera, double deltaSeconds) {
         TVCamSettings config = settings();
-        if (!config.autoZoom || aimDistance < 0.0) {
+        boolean enabled = camera.autoZoom != null ? camera.autoZoom : config.autoZoom;
+        if (!enabled || aimDistance < 0.0) {
             autoZoomFactor = MathHelper.lerp(
                     (float) (1.0 - Math.exp(-config.zoomResponse() * deltaSeconds)), autoZoomFactor, 1.0f);
             return autoZoomFactor;
@@ -491,8 +559,7 @@ public final class CameraDirector {
         return window.isOpen()
                 && activeCamera() != null
                 && client.world != null
-                && client.player != null
-                && client.currentScreen == null;
+                && client.player != null;
     }
 
     public void beginFrame() {

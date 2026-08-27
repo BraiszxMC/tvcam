@@ -4,6 +4,8 @@ import com.braiszx.tvcam.camera.CameraDirector;
 import com.braiszx.tvcam.camera.CameraMode;
 import com.braiszx.tvcam.camera.CameraPoint;
 import com.braiszx.tvcam.camera.Field;
+import com.braiszx.tvcam.camera.TargetSpec;
+import com.braiszx.tvcam.gui.DeskScreen;
 import com.braiszx.tvcam.camera.TVCamSettings;
 import com.braiszx.tvcam.camera.TargetTracker;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -15,7 +17,9 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.text.Text;
+import net.minecraft.registry.Registries;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
@@ -122,6 +126,33 @@ public final class Commands {
                                                 .executes(c -> fieldGoal(c.getSource(),
                                                         IntegerArgumentType.getInteger(c, "numero"),
                                                         DoubleArgumentType.getDouble(c, "radio")))))))
+                        .then(literal("target")
+                                .then(argument("camara", IntegerArgumentType.integer(1))
+                                        .then(literal("ball").executes(c -> target(c.getSource(),
+                                                IntegerArgumentType.getInteger(c, "camara"),
+                                                TargetSpec.ball())))
+                                        .then(literal("global").executes(c -> target(c.getSource(),
+                                                IntegerArgumentType.getInteger(c, "camara"),
+                                                TargetSpec.global())))
+                                        .then(literal("none").executes(c -> target(c.getSource(),
+                                                IntegerArgumentType.getInteger(c, "camara"),
+                                                TargetSpec.none())))
+                                        .then(literal("player").then(argument("nombre", StringArgumentType.word())
+                                                .executes(c -> target(c.getSource(),
+                                                        IntegerArgumentType.getInteger(c, "camara"),
+                                                        TargetSpec.player(StringArgumentType.getString(c, "nombre"))))))))
+                        .then(literal("desk").executes(c -> openDesk(c.getSource())))
+                        .then(literal("wand")
+                                .then(literal("none").executes(c -> wand(c.getSource(), "")))
+                                .then(argument("item", StringArgumentType.string())
+                                        .executes(c -> wand(c.getSource(),
+                                                StringArgumentType.getString(c, "item")))))
+                        .then(literal("here").then(argument("camara", IntegerArgumentType.integer(1))
+                                .executes(c -> here(c.getSource(),
+                                        IntegerArgumentType.getInteger(c, "camara")))))
+                        .then(literal("aim").then(argument("camara", IntegerArgumentType.integer(1))
+                                .executes(c -> aim(c.getSource(),
+                                        IntegerArgumentType.getInteger(c, "camara")))))
                         .then(literal("testgoal").executes(c -> testGoal(c.getSource())))
                         .then(literal("info").executes(c -> info(c.getSource())))
                         .executes(c -> help(c.getSource()))));
@@ -151,9 +182,10 @@ public final class Commands {
         for (int i = 0; i < cameras.size(); i++) {
             CameraPoint camera = cameras.get(i);
             boolean live = i == CameraDirector.get().activeIndex();
-            source.sendFeedback(Text.literal(String.format("  %d. %s  [%s]  x%.1f  (%.0f, %.0f, %.0f)%s",
-                            i + 1, camera.name(), camera.mode().name().toLowerCase(), camera.zoom(),
-                            camera.x(), camera.y(), camera.z(), live ? "  <- al aire" : ""))
+            source.sendFeedback(Text.literal(String.format("  %d. %s  [%s -> %s]  x%.1f  (%.0f, %.0f, %.0f)%s",
+                            i + 1, camera.name(), camera.mode().name().toLowerCase(),
+                            camera.target().shortLabel(), camera.zoom(),
+                            camera.x, camera.y, camera.z, live ? "  <- al aire" : ""))
                     .formatted(live ? Formatting.GREEN : Formatting.WHITE));
         }
         return 1;
@@ -211,7 +243,11 @@ public final class Commands {
             // La distancia que hay ahora entre camara y objetivo es la que mantendra.
             offset = camera.pos().subtract(target.getBoundingBox().getCenter());
         }
-        director.replace(index, camera.withMode(mode, offset));
+        camera.mode = mode;
+        if (mode == CameraMode.ACOMPANAR) {
+            camera.setOffset(offset);
+        }
+        director.touch();
         source.sendFeedback(Text.literal("Camara " + number + " en modo " + mode.name().toLowerCase())
                 .formatted(Formatting.GREEN));
         return 1;
@@ -225,7 +261,8 @@ public final class Commands {
             source.sendError(Text.literal("No hay ninguna camara al aire"));
             return 0;
         }
-        director.replace(index, camera.withZoom(factor));
+        camera.zoom = factor;
+        director.touch();
         source.sendFeedback(Text.literal(String.format("Zoom x%.1f en la camara %d", factor, index + 1))
                 .formatted(Formatting.AQUA));
         return 1;
@@ -382,6 +419,72 @@ public final class Commands {
         return 1;
     }
 
+    private static int target(FabricClientCommandSource source, int number, TargetSpec spec) {
+        CameraDirector director = CameraDirector.get();
+        CameraPoint camera = director.at(number - 1);
+        if (camera == null) {
+            source.sendError(Text.literal("No existe la camara " + number));
+            return 0;
+        }
+        camera.target = spec;
+        director.touch();
+        source.sendFeedback(Text.literal("La camara " + number + " sigue a " + spec.describe())
+                .formatted(Formatting.GREEN));
+        if (camera.mode() == CameraMode.FIJA && spec.kind != TargetSpec.Kind.NINGUNO) {
+            source.sendFeedback(Text.literal(
+                            "Recuerda que esta en modo fija: ponla en seguir o acompanar para que se mueva")
+                    .formatted(Formatting.YELLOW));
+        }
+        return 1;
+    }
+
+    private static int openDesk(FabricClientCommandSource source) {
+        // La pantalla no puede abrirse desde el hilo del comando sin mas: se hace
+        // en el siguiente tick del cliente.
+        MinecraftClient client = MinecraftClient.getInstance();
+        client.send(() -> client.setScreen(new DeskScreen(false)));
+        return 1;
+    }
+
+    private static int wand(FabricClientCommandSource source, String item) {
+        if (!item.isBlank()) {
+            Identifier id = Identifier.tryParse(item);
+            if (id == null || !Registries.ITEM.containsId(id)) {
+                source.sendError(Text.literal("No conozco el item " + item
+                        + " (ejemplo: minecraft:clock)"));
+                return 0;
+            }
+            item = id.toString();
+        }
+        CameraDirector.get().settings().wandItem = item;
+        CameraDirector.get().saveSettings();
+        source.sendFeedback(Text.literal(item.isBlank()
+                        ? "Ya no hay item que abra la mesa"
+                        : "Llevar " + item + " en la mano abrira la mesa de realizacion")
+                .formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int here(FabricClientCommandSource source, int number) {
+        if (!CameraDirector.get().moveHere(number - 1)) {
+            source.sendError(Text.literal("No existe la camara " + number));
+            return 0;
+        }
+        source.sendFeedback(Text.literal("Camara " + number + " traida a donde estas")
+                .formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int aim(FabricClientCommandSource source, int number) {
+        if (!CameraDirector.get().aimHere(number - 1)) {
+            source.sendError(Text.literal("No existe la camara " + number));
+            return 0;
+        }
+        source.sendFeedback(Text.literal("Camara " + number + " reapuntada sin moverla de sitio")
+                .formatted(Formatting.GREEN));
+        return 1;
+    }
+
     // ---------------------------------------------------------------- campos
 
     private static int fieldAdd(FabricClientCommandSource source, String name, double radius) {
@@ -500,7 +603,13 @@ public final class Commands {
                   /tvcam field use <nombre> | none   cambia de campo
                   /tvcam field list | del <nombre>
                   /tvcam testgoal          prueba el rotulo de gol
-                OBJETIVO
+                MESA
+                  /tvcam desk              abre la mesa de realizacion (tecla M)
+                  /tvcam wand <item>       ese item en la mano abre la mesa solo
+                  /tvcam target <n> ball|player <nombre>|global|none
+                  /tvcam here <n>          trae esa camara a donde estas
+                  /tvcam aim <n>           la reapunta sin moverla
+                OBJETIVO GENERAL
                   /tvcam ball              seguir la pelota de BlockBall
                   /tvcam lock              seguir aquello a lo que apuntas
                   /tvcam player <nombre>   seguir a un jugador

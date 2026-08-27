@@ -3,48 +3,137 @@ package com.braiszx.tvcam.camera;
 import net.minecraft.util.math.Vec3d;
 
 /**
- * Una camara colocada en el mundo: donde esta, hacia donde mira por defecto, como
- * se comporta respecto al objetivo y cuanto zoom lleva.
+ * Una camara colocada en el mundo, con todos sus ajustes propios: donde esta,
+ * como se comporta, a quien enfoca, cuanto zoom lleva y con que pulso sigue.
  *
- * <p>Los campos nuevos pueden faltar en ficheros guardados por versiones viejas,
- * por eso {@link #normalized()} rellena los huecos.
+ * <p>Es una clase y no un record a proposito: cada ajuste nuevo se anade sin
+ * romper los ficheros guardados por versiones anteriores, y los que puedan
+ * heredarse del ajuste general se guardan como objeto nulo, que es justo lo que
+ * significa "usa el general".
  */
-public record CameraPoint(String name, double x, double y, double z, float yaw, float pitch,
-                          CameraMode mode, float zoom, double offsetX, double offsetY, double offsetZ) {
+public final class CameraPoint {
+    public String name = "Camara";
+    public double x;
+    public double y;
+    public double z;
+    public float yaw;
+    public float pitch;
 
-    public static CameraPoint fixed(String name, Vec3d pos, float yaw, float pitch) {
-        return new CameraPoint(name, pos.x, pos.y, pos.z, yaw, pitch, CameraMode.FIJA, 1.0f, 0, 0, 0);
+    public CameraMode mode = CameraMode.FIJA;
+    public float zoom = 1.0f;
+
+    /** Desplazamiento respecto al objetivo, usado por el modo ACOMPANAR. */
+    public double offsetX;
+    public double offsetY;
+    public double offsetZ;
+
+    /** A quien enfoca esta camara en concreto. */
+    public TargetSpec target = TargetSpec.global();
+
+    /** null = usa el ajuste general. */
+    public Boolean autoZoom;
+    /** null = usa el ajuste general. 0-100. */
+    public Integer smoothing;
+
+    public CameraPoint() {
+    }
+
+    public static CameraPoint at(String name, Vec3d pos, float yaw, float pitch) {
+        CameraPoint camera = new CameraPoint();
+        camera.name = name;
+        camera.x = pos.x;
+        camera.y = pos.y;
+        camera.z = pos.z;
+        camera.yaw = yaw;
+        camera.pitch = pitch;
+        return camera;
+    }
+
+    public String name() {
+        return name;
     }
 
     public Vec3d pos() {
         return new Vec3d(x, y, z);
     }
 
-    /** Desplazamiento respecto al objetivo, usado por el modo ACOMPANAR. */
+    public float yaw() {
+        return yaw;
+    }
+
+    public float pitch() {
+        return pitch;
+    }
+
+    public CameraMode mode() {
+        return mode;
+    }
+
+    public float zoom() {
+        return zoom;
+    }
+
     public Vec3d offset() {
         return new Vec3d(offsetX, offsetY, offsetZ);
     }
 
+    public TargetSpec target() {
+        return target == null ? (target = TargetSpec.global()) : target;
+    }
+
+    public void moveTo(Vec3d pos, float newYaw, float newPitch) {
+        this.x = pos.x;
+        this.y = pos.y;
+        this.z = pos.z;
+        this.yaw = newYaw;
+        this.pitch = newPitch;
+    }
+
+    public void aimAt(float newYaw, float newPitch) {
+        this.yaw = newYaw;
+        this.pitch = newPitch;
+    }
+
+    public void setOffset(Vec3d offset) {
+        this.offsetX = offset.x;
+        this.offsetY = offset.y;
+        this.offsetZ = offset.z;
+    }
+
+    public CameraPoint copy() {
+        CameraPoint copy = new CameraPoint();
+        copy.name = name;
+        copy.x = x;
+        copy.y = y;
+        copy.z = z;
+        copy.yaw = yaw;
+        copy.pitch = pitch;
+        copy.mode = mode;
+        copy.zoom = zoom;
+        copy.offsetX = offsetX;
+        copy.offsetY = offsetY;
+        copy.offsetZ = offsetZ;
+        copy.target = target().copy();
+        copy.autoZoom = autoZoom;
+        copy.smoothing = smoothing;
+        return copy;
+    }
+
     /** Rellena lo que falte al leer un fichero guardado por una version anterior. */
     public CameraPoint normalized() {
-        CameraMode safeMode = mode == null ? CameraMode.FIJA : mode;
-        float safeZoom = zoom <= 0.0f ? 1.0f : zoom;
-        if (safeMode == mode && safeZoom == zoom) {
-            return this;
+        if (mode == null) {
+            mode = CameraMode.FIJA;
         }
-        return new CameraPoint(name, x, y, z, yaw, pitch, safeMode, safeZoom, offsetX, offsetY, offsetZ);
-    }
-
-    public CameraPoint withName(String newName) {
-        return new CameraPoint(newName, x, y, z, yaw, pitch, mode, zoom, offsetX, offsetY, offsetZ);
-    }
-
-    public CameraPoint withMode(CameraMode newMode, Vec3d newOffset) {
-        return new CameraPoint(name, x, y, z, yaw, pitch, newMode, zoom,
-                newOffset.x, newOffset.y, newOffset.z);
-    }
-
-    public CameraPoint withZoom(float newZoom) {
-        return new CameraPoint(name, x, y, z, yaw, pitch, mode, newZoom, offsetX, offsetY, offsetZ);
+        if (zoom <= 0.0f) {
+            zoom = 1.0f;
+        }
+        if (target == null) {
+            // Las camaras de antes no tenian objetivo propio: seguian al general.
+            target = TargetSpec.global();
+        }
+        if (name == null || name.isBlank()) {
+            name = "Camara";
+        }
+        return this;
     }
 }
