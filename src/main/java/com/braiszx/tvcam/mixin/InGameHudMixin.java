@@ -1,6 +1,7 @@
 package com.braiszx.tvcam.mixin;
 
 import com.braiszx.tvcam.camera.CameraDirector;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.hud.InGameHud;
 import net.minecraft.client.render.RenderTickCounter;
@@ -13,22 +14,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * La capa de graficos de la emision.
  *
- * <p>En los frames de camara se salta entero el HUD del juego (vida, hotbar,
- * chat, titulos...) para que el plano salga limpio, y en su lugar se dibujan los
- * rotulos de television. En tus frames no se toca nada.
+ * <p>El HUD se oculta por la via del propio juego (la misma opcion que F1), y aqui
+ * solo se anaden encima los rotulos de television. En tus frames no se toca nada.
  */
 @Mixin(InGameHud.class)
 public class InGameHudMixin {
-    @Inject(method = "render", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "render", at = @At("RETURN"))
     private void tvcam$broadcastGraphics(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         CameraDirector director = CameraDirector.get();
-        if (!director.isBroadcastFrame()) {
-            return;
-        }
-        if (director.isCameraFrame()) {
+        // Los rotulos van encima del plano, y solo cuando el frame es de emision y
+        // no hay ninguna pantalla abierta (con la mesa abierta la emision se recoge
+        // antes, ya limpia, y no pasa por aqui).
+        if (director.isCameraFrame() && MinecraftClient.getInstance().currentScreen == null) {
             director.broadcast().render(context);
         }
-        ci.cancel();
     }
 
     /** BlockBall canta el gol con un titulo que lleva el marcador... */

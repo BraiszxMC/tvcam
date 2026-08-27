@@ -36,7 +36,14 @@ public final class TargetTracker {
 
     private Kind kind = Kind.NINGUNO;
     private String playerName;
-    private int entityId = -1;
+    /** Entidad marcada a mano con /tvcam lock. */
+    private int lockedEntityId = -1;
+    /**
+     * Ultima pelota encontrada. Va aparte de la entidad marcada a proposito: si
+     * compartieran variable, una camara que sigue la pelota le pisaria el objetivo
+     * a otra que sigue a un jugador, que es justo lo que pasaba.
+     */
+    private int ballEntityId = -1;
     private int ticksSinceSearch;
 
     public Kind kind() {
@@ -69,7 +76,7 @@ public final class TargetTracker {
     public void clear() {
         kind = Kind.NINGUNO;
         playerName = null;
-        entityId = -1;
+        lockedEntityId = -1;
     }
 
     public void followBall() {
@@ -90,7 +97,7 @@ public final class TargetTracker {
         }
         clear();
         kind = Kind.ENTIDAD;
-        entityId = entity.getId();
+        lockedEntityId = entity.getId();
         return true;
     }
 
@@ -134,7 +141,7 @@ public final class TargetTracker {
         }
         return switch (kind) {
             case JUGADOR -> findPlayer(world, playerName);
-            case ENTIDAD -> valid(world.getEntityById(entityId));
+            case ENTIDAD -> valid(world.getEntityById(lockedEntityId));
             case PELOTA -> resolveBall(world, client);
             case NINGUNO -> null;
         };
@@ -145,7 +152,7 @@ public final class TargetTracker {
     }
 
     private Entity resolveBall(ClientWorld world, MinecraftClient client) {
-        Entity current = valid(world.getEntityById(entityId));
+        Entity current = valid(world.getEntityById(ballEntityId));
         if (current != null) {
             return current;
         }
@@ -160,8 +167,8 @@ public final class TargetTracker {
                 : (client.player != null ? client.player.getEntityPos() : Vec3d.ZERO);
         Entity found = findBall(world, from, field);
         if (found != null) {
-            entityId = found.getId();
-            TVCam.LOGGER.info("Pelota encontrada (entidad {})", entityId);
+            ballEntityId = found.getId();
+            TVCam.LOGGER.info("Pelota encontrada (entidad {})", ballEntityId);
         }
         return found;
     }

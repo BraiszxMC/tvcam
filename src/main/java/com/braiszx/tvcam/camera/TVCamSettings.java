@@ -37,6 +37,12 @@ public final class TVCamSettings {
      */
     public String wandItem = "";
 
+    /**
+     * Deja fuera de la emision las hitboxes y demas ayudas de F3, aunque las
+     * tengas puestas en tu pantalla.
+     */
+    public boolean hideDebugInBroadcast = true;
+
     /** Realizador automatico: corta solo a la camara que mejor ve la jugada. */
     public boolean autoDirector = false;
     /** Segundos minimos que aguanta un plano antes de que el realizador corte a otro. */

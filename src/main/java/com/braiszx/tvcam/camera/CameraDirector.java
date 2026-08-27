@@ -42,6 +42,9 @@ public final class CameraDirector {
 
     private int active = -1;
     private boolean cameraFrame;
+    private boolean hudHiddenBackup;
+    /** true si la imagen de este frame ya se mando a la ventana de emision. */
+    private boolean feedSent;
     /** Camara cuya miniatura se esta dibujando en este frame, o -1. */
     private int previewFrame = -1;
     /** Cuantas camaras quieren miniatura (la mesa abierta las pide). */
@@ -628,8 +631,14 @@ public final class CameraDirector {
     public void beginFrame() {
         frameCounter++;
         previewFrame = -1;
+        feedSent = false;
         cameraFrame = canBroadcast() && mirror.hasFrame()
                 && (frameCounter % settings().frameRatio == 0L);
+        if (cameraFrame) {
+            MinecraftClient client = MinecraftClient.getInstance();
+            hudHiddenBackup = client.options.hudHidden;
+            client.options.hudHidden = true;
+        }
         if (cameraFrame || !mirror.hasFrame()) {
             return;
         }
@@ -647,45 +656,76 @@ public final class CameraDirector {
     }
 
     public void endFrame() {
+        if (cameraFrame) {
+            MinecraftClient.getInstance().options.hudHidden = hudHiddenBackup;
+        }
         cameraFrame = false;
         previewFrame = -1;
     }
 
     /**
-     * Justo antes de que el juego presente el frame en tu ventana: si era un frame
-     * de camara lo mandamos a la ventana de camara y devolvemos el tuyo a la tuya,
-     * para que no parpadee entre las dos vistas.
+     * El mundo ya esta dibujado y el juego aun no ha pintado encima el HUD ni
+     * ninguna pantalla: este es el unico momento del frame en el que el
+     * framebuffer contiene <b>solo</b> la imagen de la camara.
      */
-    public void beforePresent() {
+    public void afterWorldRender() {
         MinecraftClient client = MinecraftClient.getInstance();
         Framebuffer framebuffer = client.getFramebuffer();
         if (framebuffer == null) {
             return;
         }
         try {
-            if (selfTestPresenting) {
-                if (window.present(framebuffer)) {
-                    selfTestFrames++;
-                }
+            if (previewFrame >= 0) {
+                previews.capture(previewFrame, framebuffer);
                 return;
             }
-            if (previewFrame >= 0) {
-                // El monitor no va a la emision: se guarda reducido y tu ventana
-                // recupera tu ultimo frame para que no parpadee.
-                previews.capture(previewFrame, framebuffer);
-                mirror.present();
-            } else if (cameraFrame) {
+            // Con una pantalla abierta (la mesa, el inventario, el menu...) la
+            // emision se manda ya desde aqui, limpia. Sin pantalla se espera al
+            // final del frame para que salgan tambien los rotulos.
+            if (cameraFrame && client.currentScreen != null) {
                 window.present(framebuffer);
-                mirror.present();
-            } else {
-                mirror.capture(framebuffer);
+                feedSent = true;
             }
         } catch (RuntimeException e) {
-            TVCam.LOGGER.error("Fallo presentando el frame de camara, cierro la ventana", e);
-            window.close();
-            mirror.close();
-            active = -1;
+            failBroadcast(e);
         }
+    }
+
+    /**
+     * Decide que se presenta en la ventana del jugador. Devuelve true si TVCam ya
+     * se ha encargado y el juego no debe presentar su framebuffer.
+     */
+    public boolean presentToPlayerWindow(Framebuffer framebuffer) {
+        try {
+            if (previewFrame >= 0) {
+                if (selfTestPreviews) {
+                    // Sin mundo cargado no pasa por el render del mundo: la
+                    // autoprueba recoge el monitor aqui.
+                    previews.capture(previewFrame, framebuffer);
+                }
+                // El frame era para un monitor: tu ventana repite tu ultima imagen.
+                return mirror.present();
+            }
+            selfTestPresent();
+            if (cameraFrame) {
+                if (!feedSent) {
+                    window.present(framebuffer);
+                }
+                return mirror.present();
+            }
+            mirror.capture(framebuffer);
+            return false;
+        } catch (RuntimeException e) {
+            failBroadcast(e);
+            return false;
+        }
+    }
+
+    private void failBroadcast(RuntimeException e) {
+        TVCam.LOGGER.error("Fallo presentando el frame de camara, cierro la ventana", e);
+        window.close();
+        mirror.close();
+        active = -1;
     }
 
     // ------------------------------------------------------------- autoprueba
@@ -697,6 +737,17 @@ public final class CameraDirector {
 
     public void setSelfTestPresenting(boolean value) {
         selfTestPresenting = value;
+    }
+
+    /** Solo para la autoprueba: manda el frame actual a la ventana de emision. */
+    public void selfTestPresent() {
+        if (!selfTestPresenting) {
+            return;
+        }
+        Framebuffer framebuffer = MinecraftClient.getInstance().getFramebuffer();
+        if (framebuffer != null && window.present(framebuffer)) {
+            selfTestFrames++;
+        }
     }
 
     public int selfTestPresentedFrames() {

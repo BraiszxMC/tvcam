@@ -153,6 +153,9 @@ public final class Commands {
                         .then(literal("aim").then(argument("camara", IntegerArgumentType.integer(1))
                                 .executes(c -> aim(c.getSource(),
                                         IntegerArgumentType.getInteger(c, "camara")))))
+                        .then(literal("debug").then(argument("visible", BoolArgumentType.bool())
+                                .executes(c -> debugInBroadcast(c.getSource(),
+                                        BoolArgumentType.getBool(c, "visible")))))
                         .then(literal("testgoal").executes(c -> testGoal(c.getSource())))
                         .then(literal("info").executes(c -> info(c.getSource())))
                         .executes(c -> help(c.getSource()))));
@@ -556,6 +559,16 @@ public final class Commands {
         return 1;
     }
 
+    private static int debugInBroadcast(FabricClientCommandSource source, boolean visible) {
+        CameraDirector.get().settings().hideDebugInBroadcast = !visible;
+        CameraDirector.get().saveSettings();
+        source.sendFeedback(Text.literal(visible
+                        ? "Las hitboxes y ayudas de F3 SI saldran en la emision"
+                        : "Las hitboxes y ayudas de F3 se quedan solo en tu pantalla")
+                .formatted(Formatting.AQUA));
+        return 1;
+    }
+
     private static int testGoal(FabricClientCommandSource source) {
         CameraDirector.get().broadcast().testGoal();
         source.sendFeedback(Text.literal("Rotulo de gol lanzado (se ve en la ventana de emision)")
@@ -623,6 +636,7 @@ public final class Commands {
                   /tvcam autozoom max <n>       tope del zoom automatico
                   /tvcam autozoom speed <0-100> lo rapido que se mueve
                   /tvcam auto <true|false>   realizador automatico
+                  /tvcam debug <true|false>  hitboxes y F3 dentro de la emision
                   /tvcam info                resolucion y ajustes actuales
                 TECLAS: Numpad 1-9 cortan, 0 para, * crea, . abre la ventana,
                 + y - zoom, / marca objetivo, Intro realizador automatico""")

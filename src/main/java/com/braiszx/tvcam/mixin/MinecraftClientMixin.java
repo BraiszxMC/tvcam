@@ -19,4 +19,5 @@ public class MinecraftClientMixin {
     private void tvcam$endFrame(boolean tick, CallbackInfo ci) {
         CameraDirector.get().endFrame();
     }
+
 }

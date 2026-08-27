@@ -30,8 +30,6 @@ public final class DeskScreen extends Screen {
     private final boolean openedByWand;
     private TextFieldWidget nameField;
     private int page;
-    /** Donde empieza el bloque de controles generales, para la serigrafia. */
-    private int generalTop;
 
     public DeskScreen(boolean openedByWand) {
         super(Text.literal("Mesa de realizacion"));
@@ -71,11 +69,13 @@ public final class DeskScreen extends Screen {
         int gridLeft = margin;
         int gridTop = 40;
         int gridRight = panelX - 12;
-        int busTop = height - 62;
+        int busTop = height - 78;
 
-        buildMultiviewer(cameras, gridLeft, gridTop, gridRight - gridLeft, busTop - gridTop - 10);
+        buildMultiviewer(cameras, gridLeft, gridTop, gridRight - gridLeft, busTop - gridTop - 40);
+        buildGeneralBar(gridLeft, busTop - 36, gridRight - gridLeft);
         buildProgramBus(cameras, gridLeft, busTop, gridRight - gridLeft);
-        buildPanel(panelX, gridTop, panelWidth, height - gridTop - margin);
+        // Se deja libre la franja de la barra de ayuda de abajo.
+        buildPanel(panelX, gridTop, panelWidth, height - gridTop - margin - 18);
     }
 
     // ------------------------------------------------------------ multiviewer
@@ -168,13 +168,16 @@ public final class DeskScreen extends Screen {
             addDrawableChild(new ConsoleButton(keyX, y, keyWidth, 26, String.valueOf(i + 1), () -> {
                 director.cut(index);
                 select(index);
-            }).compact().accent(Console.TALLY).lit(() -> director.activeIndex() == index));
+            }).compact().accent(Console.TALLY).lit(() -> director.activeIndex() == index)
+                    .help("Pone la camara " + (i + 1) + " al aire. Tambien con el "
+                            + (i + 1) + " del teclado numerico."));
             keyX += keyWidth + gap;
         }
         addDrawableChild(new ConsoleButton(keyX + 8, y, 46, 26, "NEGRO", () -> {
             director.cut(-1);
             rebuild();
-        }).compact().lit(() -> director.activeIndex() < 0));
+        }).compact().lit(() -> director.activeIndex() < 0)
+                .help("Corta la emision: la ventana TVCam deja de seguir a ninguna camara."));
     }
 
     // ------------------------------------------------------------------ panel
@@ -186,13 +189,10 @@ public final class DeskScreen extends Screen {
         // Trece filas tienen que caber en el panel sea cual sea la escala de la
         // interfaz: se calcula el alto de fila a partir del sitio que hay, en vez
         // de anclar unos controles arriba y otros abajo y que se pisen.
-        int cameraRows = camera == null ? 0 : 9;
-        int generalRows = 4;
-        int separators = camera == null ? 1 : 2;
         int gap = 3;
-        int totalRows = cameraRows + generalRows;
-        int available = height - 12 - separators * 8;
-        int row = Math.clamp(available / Math.max(1, totalRows) - gap, 11, 18);
+        int totalRows = camera == null ? 1 : 9;
+        int available = height - 12;
+        int row = Math.clamp(available / Math.max(1, totalRows) - gap, 10, 18);
         int half = (width - gap) / 2;
         int cursor = y + 8;
 
@@ -211,38 +211,51 @@ public final class DeskScreen extends Screen {
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleMode(camera))
-                    .label(() -> "Modo  " + camera.mode().name().toLowerCase()));
+                    .label(() -> "Movimiento: " + modeLabel(camera.mode()))
+                    .help("Como se mueve esta camara. QUIETA: no se mueve nunca. "
+                            + "GIRA: se queda en su sitio y gira siguiendo a quien enfoca. "
+                            + "PERSIGUE: se mueve con el, manteniendo la distancia actual."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleTarget(camera))
-                    .label(() -> "Sigue  " + camera.target().shortLabel()));
+                    .label(() -> "Enfoca a: " + camera.target().shortLabel())
+                    .help("A quien enfoca ESTA camara, sin afectar a las demas. Pulsa para "
+                            + "pasar por: el objetivo comun, la pelota, cada jugador conectado y nadie. "
+                            + "Solo tiene efecto si el movimiento es GIRA o PERSIGUE."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, half, row, "ZOOM -", () -> {
                 camera.zoom = Math.clamp(camera.zoom - 0.25f, 1.0f, 10.0f);
                 director.touch();
-            }).compact());
+            }).compact().help("Abre el plano de esta camara."));
             addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "", () -> {
                 camera.zoom = Math.clamp(camera.zoom + 0.25f, 1.0f, 10.0f);
                 director.touch();
-            }).compact().label(() -> String.format("x%.2f +", camera.zoom())));
+            }).compact().label(() -> String.format("x%.2f +", camera.zoom()))
+                    .help("Aprieta el plano de esta camara, como un teleobjetivo."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleAutoZoom(camera))
-                    .label(() -> "Zoom auto  " + (camera.autoZoom == null ? "general"
-                            : camera.autoZoom ? "si" : "no"))
-                    .lit(() -> Boolean.TRUE.equals(camera.autoZoom)));
+                    .label(() -> "Zoom auto: " + heredado(camera.autoZoom == null,
+                            camera.autoZoom != null && camera.autoZoom ? "si" : "no"))
+                    .lit(() -> Boolean.TRUE.equals(camera.autoZoom))
+                    .help("Que la camara apriete sola cuando la jugada se aleja. "
+                            + "'como el comun' usa lo que tengas puesto para toda la retransmision."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleSmoothing(camera))
-                    .label(() -> "Pulso  " + (camera.smoothing == null ? "general"
-                            : String.valueOf(camera.smoothing))));
+                    .label(() -> "Suavidad: " + heredado(camera.smoothing == null,
+                            String.valueOf(camera.smoothing)))
+                    .help("Cuanto tarda la camara en alcanzar a quien sigue. 0 = clavada al "
+                            + "objetivo, 90 = muy perezosa, como el pulso de un camara de verdad."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, half, row, "TRAER",
-                    () -> director.moveHere(selected)).compact());
+                    () -> director.moveHere(selected)).compact()
+                    .help("Mueve esta camara a donde estas tu ahora, mirando a donde miras."));
             addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "APUNTAR",
-                    () -> director.aimHere(selected)).compact());
+                    () -> director.aimHere(selected)).compact()
+                    .help("Deja la camara donde esta pero le cambia el encuadre al tuyo."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, half, row, "SUBIR", () -> {
@@ -250,19 +263,19 @@ public final class DeskScreen extends Screen {
                     selected--;
                 }
                 rebuild();
-            }).compact());
+            }).compact().help("Sube esta camara en la lista: cambia su numero y su tecla del numpad."));
             addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "BAJAR", () -> {
                 if (director.move(selected, 1)) {
                     selected++;
                 }
                 rebuild();
-            }).compact());
+            }).compact().help("Baja esta camara en la lista: cambia su numero y su tecla del numpad."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, half, row, "COPIAR", () -> {
                 director.duplicate(selected);
                 rebuild();
-            }).compact());
+            }).compact().help("Crea otra camara igual que esta, para retocarla sin perder la original."));
             addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "BORRAR", () -> {
                 director.remove(selected);
                 selected = Math.max(0, selected - 1);
@@ -271,33 +284,64 @@ public final class DeskScreen extends Screen {
             cursor += row + gap + 8;
         }
 
-        generalTop = cursor;
+    }
 
-        addDrawableChild(new ConsoleButton(x, cursor, width, row, "+ CAMARA AQUI", () -> {
+    /**
+     * Los mandos que valen para toda la retransmision, en su propia fila: en el
+     * panel de la camara no cabian y ademas se mezclaban con los ajustes de una
+     * sola camara, que es lo que mas confundia.
+     */
+    private void buildGeneralBar(int x, int y, int width) {
+        CameraDirector director = CameraDirector.get();
+        int gap = 5;
+        int buttonWidth = (width - gap * 3) / 4;
+
+        addDrawableChild(new ConsoleButton(x, y, buttonWidth, 20, "+ CAMARA", () -> {
             director.addHere(null);
             selected = director.cameras().size() - 1;
             rebuild();
-        }).compact().accent(Console.OK));
-        cursor += row + gap;
+        }).compact().accent(Console.OK)
+                .help("Crea una camara nueva justo donde estas tu, mirando a donde miras."));
 
-        addDrawableChild(new ConsoleButton(x, cursor, width, row, "", director::toggleWindow)
-                .label(() -> "Emision  " + (director.window().isOpen() ? "ON" : "OFF"))
+        addDrawableChild(new ConsoleButton(x + buttonWidth + gap, y, buttonWidth, 20, "",
+                director::toggleWindow)
+                .compact()
+                .label(() -> "Emision: " + (director.window().isOpen() ? "ON" : "OFF"))
                 .lit(() -> director.window().isOpen())
-                .accent(Console.TALLY));
-        cursor += row + gap;
+                .accent(Console.TALLY)
+                .help("Abre o cierra la ventana TVCam, que es la que capturas en OBS."));
 
-        addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> {
+        addDrawableChild(new ConsoleButton(x + (buttonWidth + gap) * 2, y, buttonWidth, 20, "", () -> {
             director.settings().autoDirector = !director.settings().autoDirector;
             director.saveSettings();
-        }).label(() -> "Realizador  " + (director.settings().autoDirector ? "auto" : "manual"))
-                .lit(() -> director.settings().autoDirector));
-        cursor += row + gap;
+        }).compact()
+                .label(() -> "Corta: " + (director.settings().autoDirector ? "el mod" : "tu"))
+                .lit(() -> director.settings().autoDirector)
+                .help("En 'el mod', cambia solo al plano que mejor ve la jugada. "
+                        + "En 'tu', mandas tu con el numpad o pulsando dos veces un monitor."));
 
-        addDrawableChild(new ConsoleButton(x, cursor, width, row, "", this::cycleGlobalTarget)
-                .label(() -> "General  " + director.target().shortLabel()));
+        addDrawableChild(new ConsoleButton(x + (buttonWidth + gap) * 3, y, buttonWidth, 20, "",
+                this::cycleGlobalTarget)
+                .compact()
+                .label(() -> "Comun: " + director.target().shortLabel())
+                .help("A quien enfocan las camaras que tengan puesto 'el comun'. "
+                        + "No toca a las que enfocan a alguien concreto."));
     }
 
     // --------------------------------------------------------------- acciones
+
+    /** Nombres en castellano llano para los modos, que "acompanar" no dice nada. */
+    private static String modeLabel(CameraMode mode) {
+        return switch (mode) {
+            case FIJA -> "QUIETA";
+            case SEGUIR -> "GIRA";
+            case ACOMPANAR -> "PERSIGUE";
+        };
+    }
+
+    private static String heredado(boolean inherited, String value) {
+        return inherited ? "comun" : value;
+    }
 
     private void select(int index) {
         selected = index;
@@ -391,6 +435,57 @@ public final class DeskScreen extends Screen {
         renderChrome(context);
         super.render(context, mouseX, mouseY, delta);
         renderLabels(context);
+        renderHelp(context);
+    }
+
+    /** La explicacion del boton que tienes debajo del raton, abajo del todo. */
+    private void renderHelp(DrawContext context) {
+        String help = null;
+        for (var child : children()) {
+            if (child instanceof ConsoleButton button && button.isHovered()) {
+                help = button.helpText();
+                break;
+            }
+        }
+        if (help == null) {
+            help = "Un clic selecciona; dos clics ponen al aire. Pon el raton en un boton.";
+        }
+        int y = height - 12;
+        context.fill(0, y - 4, width, height, Console.PANEL);
+        // Una sola linea: si no cabe entera, se recorta.
+        context.drawText(Console.font(), Console.font().trimToWidth(help, width - 24), 12, y,
+                Console.TEXT_DIM, false);
+    }
+
+    /**
+     * Con la mesa abierta el teclado va a la pantalla y no al juego, asi que las
+     * teclas del numpad dejaban de funcionar justo cuando mas falta hacen.
+     */
+    @Override
+    public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
+        if (nameField == null || !nameField.isFocused()) {
+            int key = input.key();
+            if (key >= org.lwjgl.glfw.GLFW.GLFW_KEY_KP_1 && key <= org.lwjgl.glfw.GLFW.GLFW_KEY_KP_9) {
+                int index = key - org.lwjgl.glfw.GLFW.GLFW_KEY_KP_1;
+                CameraDirector.get().cut(index);
+                select(index);
+                return true;
+            }
+            if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_0) {
+                CameraDirector.get().cut(-1);
+                return true;
+            }
+            if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ADD || key == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_SUBTRACT) {
+                CameraPoint camera = CameraDirector.get().at(selected);
+                if (camera != null) {
+                    float step = key == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ADD ? 0.25f : -0.25f;
+                    camera.zoom = Math.clamp(camera.zoom + step, 1.0f, 10.0f);
+                    CameraDirector.get().touch();
+                }
+                return true;
+            }
+        }
+        return super.keyPressed(input);
     }
 
     /** El mueble: cabecera, paneles y serigrafia. */
@@ -420,11 +515,9 @@ public final class DeskScreen extends Screen {
         Console.outline(context, panelX - 6, 34, panelWidth + 12, height - 48, Console.EDGE_SOFT);
 
         Console.sectionTitle(context, "CAMARA", panelX, 34, panelWidth);
-        if (generalTop > 0) {
-            Console.sectionTitle(context, "GENERAL", panelX, generalTop - 9, panelWidth);
-        }
+        Console.sectionTitle(context, "GENERAL", margin, height - 126, 120);
         Console.sectionTitle(context, "MULTIVIEWER", margin, 32, 120);
-        Console.sectionTitle(context, "PROGRAMA", margin, height - 74, 120);
+        Console.sectionTitle(context, "PROGRAMA", margin, height - 88, 120);
     }
 
     private void renderLabels(DrawContext context) {

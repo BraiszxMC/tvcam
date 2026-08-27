@@ -109,6 +109,23 @@ tirado.
 reasignables en los controles de Minecraft), asi que basta con configurar cada
 boton fisico con la tecla que quieras.
 
+### La emision sale limpia
+
+Lo que ve el espectador nunca lleva encima nada tuyo:
+
+* **Sin HUD, sin chat, sin titulos y sin la mano.**
+* **Sin menus**: puedes abrir la mesa, el inventario o el menu de pausa sin que
+  salgan en la emision.
+* **Sin hitboxes ni ayudas de F3**, aunque las tengas puestas en tu pantalla.
+  Se desactiva con `/tvcam debug true` si alguna vez quieres que salgan.
+* **Tu personaje si sale**: aunque tu juegues en primera persona, en el plano de
+  camara se te ve entero.
+
+La imagen de la emision se recoge **justo cuando el mundo esta dibujado y antes de
+que el juego pinte nada encima**. Es el unico instante del frame en el que el
+framebuffer contiene solo la camara, y hacerlo mas tarde metia trozos de la
+interfaz y de los atlas de texturas en la emision.
+
 ### Cada camara con su propio objetivo
 
 Cada camara guarda **a quien sigue ella**, no lo que haga el resto:

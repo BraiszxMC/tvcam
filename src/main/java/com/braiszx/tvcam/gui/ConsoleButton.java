@@ -19,6 +19,7 @@ public class ConsoleButton extends ClickableWidget {
     private java.util.function.BooleanSupplier lit = () -> false;
     private int accent = Console.SELECT;
     private boolean compact;
+    private String help;
 
     public ConsoleButton(int x, int y, int width, int height, String text, Action action) {
         super(x, y, width, height, Text.literal(text));
@@ -40,6 +41,16 @@ public class ConsoleButton extends ClickableWidget {
     public ConsoleButton accent(int color) {
         this.accent = color;
         return this;
+    }
+
+    /** Explicacion que sale abajo al poner el raton encima. */
+    public ConsoleButton help(String text) {
+        this.help = text;
+        return this;
+    }
+
+    public String helpText() {
+        return help;
     }
 
     public ConsoleButton compact() {

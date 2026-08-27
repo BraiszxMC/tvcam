@@ -20,6 +20,14 @@ public abstract class CameraMixin {
     @Shadow
     protected abstract void setRotation(float yaw, float pitch);
 
+    /**
+     * El juego no dibuja tu propio cuerpo cuando la camara va en primera persona.
+     * Como la camara de emision esta lejos de ti, se marca como tercera persona y
+     * asi sales en el plano aunque tu juegues en primera.
+     */
+    @Shadow
+    private boolean thirdPerson;
+
     @Inject(method = "update", at = @At("TAIL"))
     private void tvcam$override(World world, Entity focusedEntity, boolean thirdPerson,
                                 boolean inverseView, float tickDelta, CallbackInfo ci) {
@@ -31,6 +39,7 @@ public abstract class CameraMixin {
         if (pose == null) {
             return;
         }
+        thirdPerson = true;
         setRotation(pose.yaw(), pose.pitch());
         setPos(pose.pos().x, pose.pos().y, pose.pos().z);
     }
