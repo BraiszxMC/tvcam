@@ -9,6 +9,7 @@
     "GameRendererMixin",
     "InGameHudMixin",
     "MinecraftClientMixin",
+    "ScreenMixin",
     "SoundSystemMixin"
   ],
   "injectors": {

@@ -44,7 +44,9 @@ public final class MonitorTile extends ClickableWidget {
 
         Identifier texture = director.previews().texture(index);
         if (texture != null) {
-            context.drawTexture(RenderPipelines.GUI_TEXTURED, texture,
+            // Opaco a proposito: el render del mundo deja el canal alfa a cero, y
+            // con la tubería normal de interfaz el monitor se dibujaba invisible.
+            context.drawTexture(RenderPipelines.GUI_OPAQUE_TEX_BG, texture,
                     getX() + 2, getY() + 2, 0.0f, 0.0f,
                     getWidth() - 4, imageHeight - 2,
                     PreviewBank.WIDTH, PreviewBank.HEIGHT);

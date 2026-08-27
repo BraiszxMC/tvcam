@@ -58,6 +58,14 @@ public final class SelfTest {
                 CameraDirector.get().window().requestCapture(
                         java.nio.file.Path.of(System.getProperty("tvcam.selftest.capture",
                                 "tvcam-selftest.png")));
+            } else if (ticks == 235) {
+                if ("color".equals(System.getenv("TVCAM_PREVIEW_TEST"))) {
+                    CameraDirector.get().selfTestPaintPreviews();
+                    TVCam.LOGGER.info("[selftest] monitores pintados de verde");
+                } else {
+                    CameraDirector.get().selfTestFillPreviews();
+                    TVCam.LOGGER.info("[selftest] monitores rellenados con el frame actual");
+                }
             } else if (ticks == 245) {
                 // Se vuelca un monitor a la ventana y se captura: asi se ve lo que
                 // lleva dentro de verdad, en vez de fiarse de que la copia funciona.

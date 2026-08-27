@@ -3,7 +3,6 @@ package com.braiszx.tvcam.mixin;
 import com.braiszx.tvcam.camera.CameraDirector;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.RenderTickCounter;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,19 +19,6 @@ public class GameRendererMixin {
         if (CameraDirector.get().isBroadcastFrame()) {
             ci.cancel();
         }
-    }
-
-    /**
-     * En cuanto el mundo esta dibujado y antes de que el juego pinte encima el HUD,
-     * el chat o cualquier pantalla, se recoge la imagen limpia.
-     *
-     * <p>Antes se recogia al final del frame, y por eso la emision salia con
-     * trozos de la interfaz y de los atlas de texturas encima: a esas alturas el
-     * framebuffer ya no contiene solo el mundo.
-     */
-    @Inject(method = "renderWorld", at = @At("RETURN"))
-    private void tvcam$cleanFeed(RenderTickCounter tickCounter, CallbackInfo ci) {
-        CameraDirector.get().afterWorldRender();
     }
 
     /** El zoom se hace estrechando el campo de vision, como un teleobjetivo real. */

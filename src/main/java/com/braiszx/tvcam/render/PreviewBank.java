@@ -56,6 +56,17 @@ public final class PreviewBank {
         return index >= 0 && index < slots.size() ? slots.get(index).buffer : null;
     }
 
+    /** Solo para la autoprueba: pinta un monitor de un color plano. */
+    public void fillWithColor(int index, int argb) {
+        Slot slot = slot(index);
+        if (slot.buffer == null) {
+            return;
+        }
+        com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder()
+                .clearColorTexture(slot.buffer.getColorAttachment(), argb);
+        slot.hasImage = true;
+    }
+
     public boolean hasImage(int index) {
         return index >= 0 && index < slots.size() && slots.get(index).hasImage;
     }

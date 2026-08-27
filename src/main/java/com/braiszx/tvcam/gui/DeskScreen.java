@@ -98,7 +98,7 @@ public final class DeskScreen extends Screen {
         int rows = 1;
         int bestSlots = -1;
         for (int candidate = 1; candidate <= 5; candidate++) {
-            int candidateWidth = (width - gap * (candidate - 1)) / candidate;
+            int candidateWidth = Math.min(190, (width - gap * (candidate - 1)) / candidate);
             if (candidateWidth < 56) {
                 break;
             }
@@ -470,6 +470,11 @@ public final class DeskScreen extends Screen {
         super.render(context, mouseX, mouseY, delta);
         renderLabels(context);
         renderHelp(context);
+        // Asi PROBAR GOL enseña el rotulo aqui mismo: en la emision lo veran los
+        // espectadores, pero tu con la mesa abierta no la estas mirando.
+        if (CameraDirector.get().broadcast().goalFlash().isShowing()) {
+            CameraDirector.get().broadcast().render(context);
+        }
     }
 
     /** La explicacion del boton que tienes debajo del raton, abajo del todo. */

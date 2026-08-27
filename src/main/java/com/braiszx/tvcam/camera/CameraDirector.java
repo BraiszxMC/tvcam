@@ -43,8 +43,6 @@ public final class CameraDirector {
     private int active = -1;
     private boolean cameraFrame;
     private boolean hudHiddenBackup;
-    /** true si la imagen de este frame ya se mando a la ventana de emision. */
-    private boolean feedSent;
     /** Camara cuya miniatura se esta dibujando en este frame, o -1. */
     private int previewFrame = -1;
     /** Cuantas camaras quieren miniatura (la mesa abierta las pide). */
@@ -631,13 +629,10 @@ public final class CameraDirector {
     public void beginFrame() {
         frameCounter++;
         previewFrame = -1;
-        feedSent = false;
         cameraFrame = canBroadcast() && mirror.hasFrame()
                 && (frameCounter % settings().frameRatio == 0L);
         if (cameraFrame) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            hudHiddenBackup = client.options.hudHidden;
-            client.options.hudHidden = true;
+            hideHud();
         }
         if (cameraFrame || !mirror.hasFrame()) {
             return;
@@ -651,44 +646,23 @@ public final class CameraDirector {
             if (!list.isEmpty()) {
                 previewCursor = (previewCursor + 1) % list.size();
                 previewFrame = previewCursor;
+                hideHud();
             }
         }
     }
 
+    private void hideHud() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        hudHiddenBackup = client.options.hudHidden;
+        client.options.hudHidden = true;
+    }
+
     public void endFrame() {
-        if (cameraFrame) {
+        if (cameraFrame || previewFrame >= 0) {
             MinecraftClient.getInstance().options.hudHidden = hudHiddenBackup;
         }
         cameraFrame = false;
         previewFrame = -1;
-    }
-
-    /**
-     * El mundo ya esta dibujado y el juego aun no ha pintado encima el HUD ni
-     * ninguna pantalla: este es el unico momento del frame en el que el
-     * framebuffer contiene <b>solo</b> la imagen de la camara.
-     */
-    public void afterWorldRender() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        Framebuffer framebuffer = client.getFramebuffer();
-        if (framebuffer == null) {
-            return;
-        }
-        try {
-            if (previewFrame >= 0) {
-                previews.capture(previewFrame, framebuffer);
-                return;
-            }
-            // Con una pantalla abierta (la mesa, el inventario, el menu...) la
-            // emision se manda ya desde aqui, limpia. Sin pantalla se espera al
-            // final del frame para que salgan tambien los rotulos.
-            if (cameraFrame && client.currentScreen != null) {
-                window.present(framebuffer);
-                feedSent = true;
-            }
-        } catch (RuntimeException e) {
-            failBroadcast(e);
-        }
     }
 
     /**
@@ -698,19 +672,18 @@ public final class CameraDirector {
     public boolean presentToPlayerWindow(Framebuffer framebuffer) {
         try {
             if (previewFrame >= 0) {
-                if (selfTestPreviews) {
-                    // Sin mundo cargado no pasa por el render del mundo: la
-                    // autoprueba recoge el monitor aqui.
-                    previews.capture(previewFrame, framebuffer);
-                }
-                // El frame era para un monitor: tu ventana repite tu ultima imagen.
+                // El monitor se recoge en el mismo punto del frame que la emision,
+                // que es donde el framebuffer lleva ya el mundo dibujado. Cogerlo
+                // antes daba monitores en negro.
+                previews.capture(previewFrame, framebuffer);
+                // Tu ventana repite tu ultima imagen para que no parpadee.
                 return mirror.present();
             }
             selfTestPresent();
             if (cameraFrame) {
-                if (!feedSent) {
-                    window.present(framebuffer);
-                }
+                // Al final del frame: el plano lleva ya los rotulos del HUD y
+                // ninguna pantalla, que se quedan fuera de los frames de camara.
+                window.present(framebuffer);
                 return mirror.present();
             }
             mirror.capture(framebuffer);
@@ -737,6 +710,24 @@ public final class CameraDirector {
 
     public void setSelfTestPresenting(boolean value) {
         selfTestPresenting = value;
+    }
+
+    /** Solo para la autoprueba: pinta los monitores de un color inconfundible. */
+    public void selfTestPaintPreviews() {
+        for (int i = 0; i < cameras().size(); i++) {
+            previews.fillWithColor(i, 0xFF00FF66);
+        }
+    }
+
+    /** Solo para la autoprueba: mete el frame actual en todos los monitores. */
+    public void selfTestFillPreviews() {
+        Framebuffer framebuffer = MinecraftClient.getInstance().getFramebuffer();
+        if (framebuffer == null) {
+            return;
+        }
+        for (int i = 0; i < cameras().size(); i++) {
+            previews.capture(i, framebuffer);
+        }
     }
 
     /**

@@ -22,10 +22,9 @@ public class InGameHudMixin {
     @Inject(method = "render", at = @At("RETURN"))
     private void tvcam$broadcastGraphics(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         CameraDirector director = CameraDirector.get();
-        // Los rotulos van encima del plano, y solo cuando el frame es de emision y
-        // no hay ninguna pantalla abierta (con la mesa abierta la emision se recoge
-        // antes, ya limpia, y no pasa por aqui).
-        if (director.isCameraFrame() && MinecraftClient.getInstance().currentScreen == null) {
+        // Los rotulos van encima del plano en los frames de emision. Las pantallas
+        // no molestan: se quedan fuera del frame de camara.
+        if (director.isCameraFrame()) {
             director.broadcast().render(context);
         }
     }
