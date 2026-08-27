@@ -80,6 +80,7 @@ public final class Keybinds {
                 toggleAuto(director);
             }
 
+            director.tickBroadcast();
             director.tickAutoDirector();
         });
     }

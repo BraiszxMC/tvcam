@@ -84,6 +84,40 @@ Y ya esta: capturas la ventana `TVCam` en OBS y tienes un partido realizado.
 | `seguir` | se queda en su sitio y gira siguiendo al objetivo, como una camara sobre tripode. **Es el plano de futbol de toda la vida** |
 | `acompanar` | se mueve con el objetivo manteniendo la distancia con la que la creaste, y lo encuadra. Para planos de seguimiento cercanos |
 
+### Varios campos en el mismo mundo
+
+Si tienes mas de un campo, marca con cual estas trabajando y TVCam dejara de
+liarse entre pelotas:
+
+```
+(te pones en el centro del campo)
+/tvcam field add CampoNorte 60      el numero es el radio en bloques
+/tvcam field goal 1                 puesto en una porteria
+/tvcam field goal 2                 y en la otra
+```
+
+Con un campo activo, al buscar la pelota **solo se miran las de dentro**. Eso
+importa porque cuando marcan gol el plugin borra la pelota y crea otra: sin campo
+marcado, la nueva podia ser la de la pista de al lado. `/tvcam field use <nombre>`
+cambia de campo y `/tvcam field none` vuelve a buscar por todo el mundo.
+
+### Cantar los goles
+
+Cuando hay gol, sobre la emision aparece un **GOL** grande con el nombre del autor
+y el marcador. En tu pantalla no sale nada: es un rotulo de television, va solo en
+la ventana que captura OBS. `/tvcam testgoal` lo lanza para que veas como queda.
+
+Hay **dos maneras** de enterarse del gol, porque ninguna vale siempre:
+
+| Via | Cuando funciona | Que saca |
+|---|---|---|
+| **El titulo del servidor** | solo si **estas jugando el partido**: BlockBall manda ese titulo unicamente a los jugadores de los dos equipos | el autor exacto y el marcador |
+| **Ver entrar la pelota** | siempre, aunque retransmitas de espectador; necesita las dos porterias marcadas | el autor por el ultimo que la toco |
+
+La primera no depende del idioma: se reconoce el titulo por su forma de marcador
+(`3 : 1`) y el autor se busca comparando el subtitulo con la lista de jugadores
+conectados, asi que da igual como tenga el servidor traducido el mensaje.
+
 **Objetivos**
 
 | Comando | Que sigue |

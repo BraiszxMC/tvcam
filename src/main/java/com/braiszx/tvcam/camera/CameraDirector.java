@@ -1,6 +1,7 @@
 package com.braiszx.tvcam.camera;
 
 import com.braiszx.tvcam.TVCam;
+import com.braiszx.tvcam.broadcast.BroadcastDirector;
 import com.braiszx.tvcam.render.CameraWindow;
 import com.braiszx.tvcam.render.FrameMirror;
 import net.minecraft.client.MinecraftClient;
@@ -35,10 +36,10 @@ public final class CameraDirector {
     private final CameraWindow window = new CameraWindow();
     private final FrameMirror mirror = new FrameMirror();
     private final TargetTracker target = new TargetTracker();
+    private final BroadcastDirector broadcast = new BroadcastDirector();
 
     private int active = -1;
     private boolean cameraFrame;
-    private boolean hudHiddenBackup;
     private long frameCounter;
 
     /** Pose y zoom con los que se esta dibujando la emision ahora mismo. */
@@ -77,6 +78,10 @@ public final class CameraDirector {
         return window;
     }
 
+    public BroadcastDirector broadcast() {
+        return broadcast;
+    }
+
     // ---------------------------------------------------------------- camaras
 
     private String worldKey() {
@@ -95,6 +100,88 @@ public final class CameraDirector {
 
     public List<CameraPoint> cameras() {
         return store.get(worldKey());
+    }
+
+    // ----------------------------------------------------------------- campos
+
+    public List<Field> fields() {
+        return store.fields(worldKey());
+    }
+
+    /** El campo en el que se esta trabajando, o null si no hay ninguno marcado. */
+    public Field activeField() {
+        String name = store.activeFieldName(worldKey());
+        if (name == null) {
+            return null;
+        }
+        for (Field field : fields()) {
+            if (field.name().equalsIgnoreCase(name)) {
+                return field;
+            }
+        }
+        return null;
+    }
+
+    public boolean useField(String name) {
+        if (name == null) {
+            store.setActiveFieldName(worldKey(), null);
+            store.save();
+            return true;
+        }
+        for (Field field : fields()) {
+            if (field.name().equalsIgnoreCase(name)) {
+                store.setActiveFieldName(worldKey(), field.name());
+                store.save();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public Field addField(String name, double radius) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player == null) {
+            return null;
+        }
+        Vec3d pos = client.player.getEntityPos();
+        Field field = new Field(name, pos.x, pos.y, pos.z, radius, null, null);
+        fields().removeIf(existing -> existing.name().equalsIgnoreCase(name));
+        fields().add(field);
+        store.setActiveFieldName(worldKey(), name);
+        store.save();
+        return field;
+    }
+
+    public boolean removeField(String name) {
+        boolean removed = fields().removeIf(field -> field.name().equalsIgnoreCase(name));
+        if (removed) {
+            String active = store.activeFieldName(worldKey());
+            if (active != null && active.equalsIgnoreCase(name)) {
+                store.setActiveFieldName(worldKey(), null);
+            }
+            store.save();
+        }
+        return removed;
+    }
+
+    /** Marca una de las dos porterias del campo activo donde esta el jugador. */
+    public Field setGoal(int which, double radius) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        Field field = activeField();
+        if (field == null || client.player == null) {
+            return null;
+        }
+        Vec3d pos = client.player.getEntityPos();
+        Field updated = field.withGoal(which, new Field.Goal(pos.x, pos.y, pos.z, radius));
+        List<Field> list = fields();
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).name().equalsIgnoreCase(field.name())) {
+                list.set(i, updated);
+                break;
+            }
+        }
+        store.save();
+        return updated;
     }
 
     public CameraPoint addHere(String name) {
@@ -313,6 +400,11 @@ public final class CameraDirector {
 
     // ------------------------------------------------------- realizador automatico
 
+    /** Llamado una vez por tick. */
+    public void tickBroadcast() {
+        broadcast.tick(target.kind() == TargetTracker.Kind.NINGUNO ? null : target.resolve(), activeField());
+    }
+
     /** Llamado una vez por tick: decide si toca cortar a otra camara. */
     public void tickAutoDirector() {
         TVCamSettings config = settings();
@@ -407,18 +499,10 @@ public final class CameraDirector {
         frameCounter++;
         cameraFrame = canBroadcast() && mirror.hasFrame()
                 && (frameCounter % settings().frameRatio == 0L);
-        if (cameraFrame) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            hudHiddenBackup = client.options.hudHidden;
-            client.options.hudHidden = true;
-        }
     }
 
     public void endFrame() {
-        if (cameraFrame) {
-            MinecraftClient.getInstance().options.hudHidden = hudHiddenBackup;
-            cameraFrame = false;
-        }
+        cameraFrame = false;
     }
 
     /**

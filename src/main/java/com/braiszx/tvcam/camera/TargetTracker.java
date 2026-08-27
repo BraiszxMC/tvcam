@@ -114,8 +114,10 @@ public final class TargetTracker {
             return null;
         }
         ticksSinceSearch = 0;
-        Vec3d from = client.player != null ? client.player.getEntityPos() : Vec3d.ZERO;
-        Entity found = findBall(world, from);
+        Field field = CameraDirector.get().activeField();
+        Vec3d from = field != null ? field.center()
+                : (client.player != null ? client.player.getEntityPos() : Vec3d.ZERO);
+        Entity found = findBall(world, from, field);
         if (found != null) {
             entityId = found.getId();
             TVCam.LOGGER.info("Pelota encontrada (entidad {})", entityId);
@@ -125,9 +127,10 @@ public final class TargetTracker {
 
     /**
      * Busca la pelota mas cercana: un armor stand invisible con algo en la cabeza,
-     * que es exactamente como BlockBall dibuja el balon.
+     * que es exactamente como BlockBall dibuja el balon. Si hay un campo marcado,
+     * ignora las pelotas de fuera.
      */
-    public static Entity findBall(ClientWorld world, Vec3d near) {
+    public static Entity findBall(ClientWorld world, Vec3d near, Field field) {
         Entity best = null;
         double bestDistance = Double.MAX_VALUE;
         for (Entity entity : world.getEntities()) {
@@ -138,6 +141,11 @@ public final class TargetTracker {
                 continue;
             }
             if (armorStand.getEquippedStack(EquipmentSlot.HEAD).isEmpty()) {
+                continue;
+            }
+            if (field != null && !field.contains(entity.getEntityPos())) {
+                // Con varios campos en el mismo mundo, solo cuentan las pelotas del
+                // campo con el que estas trabajando.
                 continue;
             }
             double distance = entity.squaredDistanceTo(near);

@@ -3,6 +3,7 @@ package com.braiszx.tvcam;
 import com.braiszx.tvcam.camera.CameraDirector;
 import com.braiszx.tvcam.camera.CameraMode;
 import com.braiszx.tvcam.camera.CameraPoint;
+import com.braiszx.tvcam.camera.Field;
 import com.braiszx.tvcam.camera.TVCamSettings;
 import com.braiszx.tvcam.camera.TargetTracker;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -98,6 +99,30 @@ public final class Commands {
                                                 IntegerArgumentType.getInteger(c, "valor"))))))
                         .then(literal("auto").then(argument("activo", BoolArgumentType.bool())
                                 .executes(c -> auto(c.getSource(), BoolArgumentType.getBool(c, "activo")))))
+                        .then(literal("field")
+                                .then(literal("add").then(argument("nombre", StringArgumentType.word())
+                                        .executes(c -> fieldAdd(c.getSource(),
+                                                StringArgumentType.getString(c, "nombre"), 60.0))
+                                        .then(argument("radio", DoubleArgumentType.doubleArg(8, 400))
+                                                .executes(c -> fieldAdd(c.getSource(),
+                                                        StringArgumentType.getString(c, "nombre"),
+                                                        DoubleArgumentType.getDouble(c, "radio"))))))
+                                .then(literal("list").executes(c -> fieldList(c.getSource())))
+                                .then(literal("use").then(argument("nombre", StringArgumentType.word())
+                                        .executes(c -> fieldUse(c.getSource(),
+                                                StringArgumentType.getString(c, "nombre")))))
+                                .then(literal("none").executes(c -> fieldUse(c.getSource(), null)))
+                                .then(literal("del").then(argument("nombre", StringArgumentType.word())
+                                        .executes(c -> fieldDel(c.getSource(),
+                                                StringArgumentType.getString(c, "nombre")))))
+                                .then(literal("goal").then(argument("numero", IntegerArgumentType.integer(1, 2))
+                                        .executes(c -> fieldGoal(c.getSource(),
+                                                IntegerArgumentType.getInteger(c, "numero"), 4.0))
+                                        .then(argument("radio", DoubleArgumentType.doubleArg(1, 20))
+                                                .executes(c -> fieldGoal(c.getSource(),
+                                                        IntegerArgumentType.getInteger(c, "numero"),
+                                                        DoubleArgumentType.getDouble(c, "radio")))))))
+                        .then(literal("testgoal").executes(c -> testGoal(c.getSource())))
                         .then(literal("info").executes(c -> info(c.getSource())))
                         .executes(c -> help(c.getSource()))));
     }
@@ -357,6 +382,84 @@ public final class Commands {
         return 1;
     }
 
+    // ---------------------------------------------------------------- campos
+
+    private static int fieldAdd(FabricClientCommandSource source, String name, double radius) {
+        Field field = CameraDirector.get().addField(name, radius);
+        if (field == null) {
+            source.sendError(Text.literal("No se pudo crear el campo"));
+            return 0;
+        }
+        source.sendFeedback(Text.literal(String.format(
+                        "Campo '%s' creado con %.0f bloques de radio y puesto como activo. "
+                                + "Marca las porterias con /tvcam field goal 1 y 2 para que cante los goles.",
+                        name, radius))
+                .formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int fieldList(FabricClientCommandSource source) {
+        CameraDirector director = CameraDirector.get();
+        List<Field> fields = director.fields();
+        if (fields.isEmpty()) {
+            source.sendFeedback(Text.literal("No hay campos marcados. Usa /tvcam field add <nombre>")
+                    .formatted(Formatting.GRAY));
+            return 1;
+        }
+        Field active = director.activeField();
+        source.sendFeedback(Text.literal("Campos de este mundo:").formatted(Formatting.AQUA));
+        for (Field field : fields) {
+            boolean isActive = active != null && active.name().equalsIgnoreCase(field.name());
+            int goals = (field.goalA() != null ? 1 : 0) + (field.goalB() != null ? 1 : 0);
+            source.sendFeedback(Text.literal(String.format("  %s  r=%.0f  porterias=%d/2%s",
+                            field.name(), field.radius(), goals, isActive ? "  <- activo" : ""))
+                    .formatted(isActive ? Formatting.GREEN : Formatting.WHITE));
+        }
+        return 1;
+    }
+
+    private static int fieldUse(FabricClientCommandSource source, String name) {
+        if (!CameraDirector.get().useField(name)) {
+            source.sendError(Text.literal("No existe el campo " + name));
+            return 0;
+        }
+        source.sendFeedback(Text.literal(name == null
+                ? "Sin campo: la pelota se busca por todo el mundo"
+                : "Campo activo: " + name).formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int fieldDel(FabricClientCommandSource source, String name) {
+        if (!CameraDirector.get().removeField(name)) {
+            source.sendError(Text.literal("No existe el campo " + name));
+            return 0;
+        }
+        source.sendFeedback(Text.literal("Campo " + name + " borrado").formatted(Formatting.YELLOW));
+        return 1;
+    }
+
+    private static int fieldGoal(FabricClientCommandSource source, int which, double radius) {
+        Field field = CameraDirector.get().setGoal(which, radius);
+        if (field == null) {
+            source.sendError(Text.literal("Marca antes un campo con /tvcam field add <nombre>"));
+            return 0;
+        }
+        boolean complete = field.goalA() != null && field.goalB() != null;
+        source.sendFeedback(Text.literal("Porteria " + which + " marcada aqui con radio "
+                        + String.format("%.0f", radius)
+                        + (complete ? ". Las dos porterias listas: ya se cantan los goles solo."
+                        : ". Falta la otra porteria."))
+                .formatted(Formatting.GREEN));
+        return 1;
+    }
+
+    private static int testGoal(FabricClientCommandSource source) {
+        CameraDirector.get().broadcast().testGoal();
+        source.sendFeedback(Text.literal("Rotulo de gol lanzado (se ve en la ventana de emision)")
+                .formatted(Formatting.AQUA));
+        return 1;
+    }
+
     private static int info(FabricClientCommandSource source) {
         CameraDirector director = CameraDirector.get();
         TVCamSettings settings = director.settings();
@@ -370,6 +473,8 @@ public final class Commands {
                         + "\n  travelling: " + settings.transitionMillis + " ms"
                         + "\n  suavizado: " + settings.smoothing + "/100"
                         + "\n  objetivo: " + director.target().describe()
+                        + "\n  campo: " + (director.activeField() == null ? "ninguno"
+                        : director.activeField().name())
                         + "\n  zoom automatico: " + (settings.autoZoom
                         ? String.format("si (x1 a %.0f bloques, tope x%.1f, ahora x%.2f)",
                         settings.autoZoomDistance, settings.autoZoomMax, director.autoZoomFactor())
@@ -389,6 +494,12 @@ public final class Commands {
                   /tvcam cut <n>           corta a esa camara (0 = parar)
                   /tvcam mode <n> <modo>   fija | seguir | acompanar
                   /tvcam zoom <1-10>       zoom de la camara al aire
+                CAMPO (para no liarse entre varios campos)
+                  /tvcam field add <nombre> [radio]  marca el campo donde estas
+                  /tvcam field goal <1|2> [radio]    marca cada porteria
+                  /tvcam field use <nombre> | none   cambia de campo
+                  /tvcam field list | del <nombre>
+                  /tvcam testgoal          prueba el rotulo de gol
                 OBJETIVO
                   /tvcam ball              seguir la pelota de BlockBall
                   /tvcam lock              seguir aquello a lo que apuntas

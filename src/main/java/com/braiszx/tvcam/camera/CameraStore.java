@@ -26,9 +26,15 @@ public final class CameraStore {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type WORLDS_TYPE =
             new com.google.gson.reflect.TypeToken<Map<String, List<CameraPoint>>>() {}.getType();
+    private static final Type FIELDS_TYPE =
+            new com.google.gson.reflect.TypeToken<Map<String, List<Field>>>() {}.getType();
+    private static final Type ACTIVE_TYPE =
+            new com.google.gson.reflect.TypeToken<Map<String, String>>() {}.getType();
 
     private final Path file;
     private final Map<String, List<CameraPoint>> byWorld = new HashMap<>();
+    private final Map<String, List<Field>> fieldsByWorld = new HashMap<>();
+    private final Map<String, String> activeFieldByWorld = new HashMap<>();
     private TVCamSettings settings = new TVCamSettings();
 
     public CameraStore() {
@@ -42,6 +48,22 @@ public final class CameraStore {
 
     public List<CameraPoint> get(String worldKey) {
         return byWorld.computeIfAbsent(worldKey, key -> new ArrayList<>());
+    }
+
+    public List<Field> fields(String worldKey) {
+        return fieldsByWorld.computeIfAbsent(worldKey, key -> new ArrayList<>());
+    }
+
+    public String activeFieldName(String worldKey) {
+        return activeFieldByWorld.get(worldKey);
+    }
+
+    public void setActiveFieldName(String worldKey, String name) {
+        if (name == null) {
+            activeFieldByWorld.remove(worldKey);
+        } else {
+            activeFieldByWorld.put(worldKey, name);
+        }
     }
 
     private void load() {
@@ -63,6 +85,18 @@ public final class CameraStore {
                 // Fichero de una version anterior: era solo el mapa de mundos.
                 worlds = GSON.fromJson(root, WORLDS_TYPE);
             }
+            if (root.has("fields")) {
+                Map<String, List<Field>> fields = GSON.fromJson(root.get("fields"), FIELDS_TYPE);
+                if (fields != null) {
+                    fieldsByWorld.putAll(fields);
+                }
+            }
+            if (root.has("activeField")) {
+                Map<String, String> active = GSON.fromJson(root.get("activeField"), ACTIVE_TYPE);
+                if (active != null) {
+                    activeFieldByWorld.putAll(active);
+                }
+            }
             if (worlds != null) {
                 worlds.forEach((key, cameras) -> {
                     List<CameraPoint> normalized = new ArrayList<>(cameras.size());
@@ -83,6 +117,8 @@ public final class CameraStore {
             JsonObject root = new JsonObject();
             root.add("settings", GSON.toJsonTree(settings));
             root.add("worlds", GSON.toJsonTree(byWorld, WORLDS_TYPE));
+            root.add("fields", GSON.toJsonTree(fieldsByWorld, FIELDS_TYPE));
+            root.add("activeField", GSON.toJsonTree(activeFieldByWorld, ACTIVE_TYPE));
             try (Writer writer = Files.newBufferedWriter(file)) {
                 GSON.toJson(root, writer);
             }
