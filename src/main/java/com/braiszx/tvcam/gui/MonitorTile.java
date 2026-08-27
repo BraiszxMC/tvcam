@@ -11,20 +11,38 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
 /**
- * Un monitor del multiviewer: la imagen de esa camara, su numero, su nombre y su
- * piloto de tally. Un clic la selecciona, dos la ponen al aire.
+ * Un monitor: la imagen de esa camara, su numero, su nombre y su piloto de tally.
+ * Un clic la selecciona, dos la ponen al aire.
  */
 public final class MonitorTile extends ClickableWidget {
     private final int index;
     private final Runnable onSelect;
     private final Runnable onTake;
+    private final boolean large;
 
     public MonitorTile(int x, int y, int width, int height, int index,
-                       Runnable onSelect, Runnable onTake) {
+                       Runnable onSelect, Runnable onTake, boolean large) {
         super(x, y, width, height, Text.literal("Camara " + (index + 1)));
         this.index = index;
         this.onSelect = onSelect;
         this.onTake = onTake;
+        this.large = large;
+    }
+
+    /** Dibuja la imagen de una camara dentro de un rectangulo, del derecho. */
+    public static boolean drawFeed(DrawContext context, int index, int x, int y, int width, int height) {
+        Identifier texture = CameraDirector.get().previews().texture(index);
+        if (texture == null) {
+            return false;
+        }
+        // El mundo se dibuja con el origen abajo, la interfaz con el origen arriba:
+        // se pide la region con la altura en negativo para darle la vuelta.
+        context.drawTexture(RenderPipelines.GUI_OPAQUE_TEX_BG, texture, x, y,
+                0.0f, PreviewBank.HEIGHT,
+                width, height,
+                PreviewBank.WIDTH, -PreviewBank.HEIGHT,
+                PreviewBank.WIDTH, PreviewBank.HEIGHT);
+        return true;
     }
 
     @Override
@@ -32,45 +50,39 @@ public final class MonitorTile extends ClickableWidget {
         CameraDirector director = CameraDirector.get();
         CameraPoint camera = director.at(index);
         boolean live = index == director.activeIndex();
-        boolean selected = onSelectIsCurrent();
+        boolean selected = DeskScreen.selectedIndex() == index;
 
-        int border = live ? Console.TALLY : (selected ? Console.SELECT
-                : (isHovered() ? Console.EDGE : Console.EDGE_SOFT));
-
-        int labelHeight = 12;
+        int labelHeight = large ? 14 : 12;
         int imageHeight = getHeight() - labelHeight;
 
         Console.panel(context, getX(), getY(), getWidth(), getHeight(), Console.PANEL_SUNKEN);
 
-        Identifier texture = director.previews().texture(index);
-        if (texture != null) {
-            // Opaco a proposito: el render del mundo deja el canal alfa a cero, y
-            // con la tubería normal de interfaz el monitor se dibujaba invisible.
-            context.drawTexture(RenderPipelines.GUI_OPAQUE_TEX_BG, texture,
-                    getX() + 2, getY() + 2, 0.0f, 0.0f,
-                    getWidth() - 4, imageHeight - 2,
-                    PreviewBank.WIDTH, PreviewBank.HEIGHT);
-        } else {
-            String waiting = "sin senal";
-            context.drawCenteredTextWithShadow(Console.font(), waiting,
+        if (!drawFeed(context, index, getX() + 2, getY() + 2, getWidth() - 4, imageHeight - 2)) {
+            context.drawCenteredTextWithShadow(Console.font(), "sin senal",
                     getX() + getWidth() / 2, getY() + imageHeight / 2 - 4, Console.TEXT_FAINT);
         }
 
-        // Barra inferior con numero, nombre y tally.
         int barY = getY() + imageHeight;
         context.fill(getX() + 2, barY, getX() + getWidth() - 2, getY() + getHeight(),
-                live ? Console.mix(Console.TALLY, 0.35f) : Console.PANEL);
-        Console.tallyLamp(context, getX() + 5, barY + 4, live);
-        String name = camera == null ? "-" : (index + 1) + " " + camera.name();
-        context.drawText(Console.font(),
-                Console.font().trimToWidth(name, getWidth() - 20), getX() + 13, barY + 2,
+                live ? Console.mix(Console.TALLY, 0.4f) : Console.PANEL);
+        Console.tallyLamp(context, getX() + 5, barY + (labelHeight - 5) / 2, live);
+        String name = camera == null ? "-" : (index + 1) + "  " + camera.name();
+        context.drawText(Console.font(), Console.font().trimToWidth(name, getWidth() - 20),
+                getX() + 13, barY + (labelHeight - 7) / 2,
                 live ? Console.TEXT : Console.TEXT_DIM, false);
 
-        Console.outline(context, getX(), getY(), getWidth(), getHeight(), border);
-    }
+        if (live) {
+            String badge = "AL AIRE";
+            int badgeWidth = Console.font().getWidth(badge) + 8;
+            context.fill(getX() + getWidth() - badgeWidth - 3, getY() + 3,
+                    getX() + getWidth() - 3, getY() + 13, Console.TALLY);
+            context.drawText(Console.font(), badge, getX() + getWidth() - badgeWidth + 1, getY() + 5,
+                    0xFFFFFFFF, false);
+        }
 
-    private boolean onSelectIsCurrent() {
-        return DeskScreen.selectedIndex() == index;
+        int border = live ? Console.TALLY : (selected ? Console.SELECT
+                : (isHovered() ? Console.EDGE : Console.EDGE_SOFT));
+        Console.outline(context, getX(), getY(), getWidth(), getHeight(), border);
     }
 
     @Override

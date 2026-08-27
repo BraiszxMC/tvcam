@@ -82,24 +82,53 @@ public final class DeskScreen extends Screen {
 
     // ------------------------------------------------------------ multiviewer
 
+    /**
+     * Arriba a la izquierda, el plano que esta al aire, grande. A su derecha, el
+     * resto de camaras en pequeño. Es como se mira una mesa de verdad: la atencion
+     * en lo que ve el espectador, y el resto de reojo.
+     */
     private void buildMultiviewer(List<CameraPoint> cameras, int x, int y, int width, int height) {
         if (cameras.isEmpty()) {
             return;
         }
+        int gap = 6;
+        int live = CameraDirector.get().activeIndex();
+
+        // El monitor de programa se lleva algo menos de la mitad del ancho.
+        int programWidth = Math.clamp(width * 42 / 100, 120, 260);
+        int programHeight = Math.min(height, programWidth * 9 / 16 + 14);
+        if (live >= 0 && live < cameras.size()) {
+            addDrawableChild(new MonitorTile(x, y, programWidth, programHeight, live,
+                    () -> select(live), () -> select(live), true));
+        } else {
+            programWidth = 0;
+        }
+
+        int gridX = programWidth == 0 ? x : x + programWidth + gap + 4;
+        int gridWidth = width - (gridX - x);
+        buildGrid(cameras, live, gridX, y, gridWidth, height);
+    }
+
+    /** Las camaras que no estan al aire, en rejilla, del tamaño que haga falta. */
+    private void buildGrid(List<CameraPoint> cameras, int live, int x, int y, int width, int height) {
+        List<Integer> rest = new ArrayList<>();
+        for (int i = 0; i < cameras.size(); i++) {
+            if (i != live) {
+                rest.add(i);
+            }
+        }
+        if (rest.isEmpty() || width < 60) {
+            return;
+        }
         int gap = 5;
-        // Se busca la rejilla que consiga meter todas las camaras a la vez: se
-        // prueban distribuciones de menos a mas columnas y se coge la primera que
-        // las muestre todas, que es la de monitores mas grandes. Si no cabe
-        // ninguna, la que mas quepan y el resto por paginas.
-        int wanted = cameras.size();
         int columns = 1;
         int tileWidth = 0;
         int tileHeight = 0;
         int rows = 1;
         int bestSlots = -1;
         for (int candidate = 1; candidate <= 5; candidate++) {
-            int candidateWidth = Math.min(190, (width - gap * (candidate - 1)) / candidate);
-            if (candidateWidth < 56) {
+            int candidateWidth = Math.min(160, (width - gap * (candidate - 1)) / candidate);
+            if (candidateWidth < 54) {
                 break;
             }
             int candidateHeight = candidateWidth * 9 / 16 + 12;
@@ -112,7 +141,7 @@ public final class DeskScreen extends Screen {
                 tileHeight = candidateHeight;
                 rows = candidateRows;
             }
-            if (slots >= wanted) {
+            if (slots >= rest.size()) {
                 columns = candidate;
                 tileWidth = candidateWidth;
                 tileHeight = candidateHeight;
@@ -120,41 +149,35 @@ public final class DeskScreen extends Screen {
                 break;
             }
         }
-        int perPage = columns * rows;
-        int pages = Math.max(1, (cameras.size() + perPage - 1) / perPage);
-        page = Math.clamp(page, 0, pages - 1);
 
-        if ("1".equals(System.getenv("TVCAM_SELFTEST"))) {
-            com.braiszx.tvcam.TVCam.LOGGER.info(
-                    "[selftest] rejilla: area {}x{} camaras={} -> {} columnas x {} filas (tile {}x{})",
-                    width, height, cameras.size(), columns, rows, tileWidth, tileHeight);
-        }
+        int perPage = columns * rows;
+        int pages = Math.max(1, (rest.size() + perPage - 1) / perPage);
+        page = Math.clamp(page, 0, pages - 1);
         int first = page * perPage;
-        for (int slot = 0; slot < perPage && first + slot < cameras.size(); slot++) {
-            int index = first + slot;
+
+        for (int slot = 0; slot < perPage && first + slot < rest.size(); slot++) {
+            int index = rest.get(first + slot);
             int column = slot % columns;
             int row = slot / columns;
-            int tileX = x + column * (tileWidth + gap);
-            int tileY = y + row * (tileHeight + gap);
-            addDrawableChild(new MonitorTile(tileX, tileY, tileWidth, tileHeight, index,
+            addDrawableChild(new MonitorTile(x + column * (tileWidth + gap),
+                    y + row * (tileHeight + gap), tileWidth, tileHeight, index,
                     () -> select(index),
                     () -> {
                         CameraDirector.get().cut(index);
                         select(index);
-                    }));
+                    }, false));
         }
 
         if (pages > 1) {
-            addDrawableChild(new ConsoleButton(x, y + rows * (tileHeight + gap), 60, 16,
-                    "< pagina", () -> {
+            int buttonsY = y + rows * (tileHeight + gap);
+            addDrawableChild(new ConsoleButton(x, buttonsY, 58, 16, "< anterior", () -> {
                 page = (page - 1 + pages) % pages;
                 rebuild();
-            }).compact());
-            addDrawableChild(new ConsoleButton(x + 66, y + rows * (tileHeight + gap), 60, 16,
-                    "pagina >", () -> {
+            }).compact().help("Mas camaras."));
+            addDrawableChild(new ConsoleButton(x + 62, buttonsY, 58, 16, "siguiente >", () -> {
                 page = (page + 1) % pages;
                 rebuild();
-            }).compact());
+            }).compact().help("Mas camaras."));
         }
     }
 
@@ -213,17 +236,18 @@ public final class DeskScreen extends Screen {
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleMode(camera))
-                    .label(() -> "Movimiento: " + modeLabel(camera.mode()))
-                    .help("Como se mueve esta camara. QUIETA: no se mueve nunca. "
-                            + "GIRA: se queda en su sitio y gira siguiendo a quien enfoca. "
-                            + "PERSIGUE: se mueve con el, manteniendo la distancia actual."));
+                    .label(() -> "Plano: " + modeLabel(camera.mode()))
+                    .help("FIJO: la camara no se mueve nunca, como un tripode bloqueado. "
+                            + "GIRA: se queda en su sitio y gira siguiendo a quien enfoca, "
+                            + "como el camara de banda. DETRAS: va detras del objetivo a la "
+                            + "distancia a la que la pusiste."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleTarget(camera))
                     .label(() -> "Enfoca a: " + camera.target().shortLabel())
-                    .help("A quien enfoca ESTA camara, sin afectar a las demas. Pulsa para "
-                            + "pasar por: el objetivo comun, la pelota, cada jugador conectado y nadie. "
-                            + "Solo tiene efecto si el movimiento es GIRA o PERSIGUE."));
+                    .help("A quien enfoca ESTA camara, sin tocar a las demas. Pulsa para pasar "
+                            + "por: el objetivo comun, la pelota, cada jugador conectado y nadie. "
+                            + "Con el plano FIJO no hace nada: pon GIRA o DETRAS."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, half, row, "ZOOM -", () -> {
@@ -238,7 +262,7 @@ public final class DeskScreen extends Screen {
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleAutoZoom(camera))
-                    .label(() -> "Zoom auto: " + heredado(camera.autoZoom == null,
+                    .label(() -> "Zoom solo: " + heredado(camera.autoZoom == null,
                             camera.autoZoom != null && camera.autoZoom ? "si" : "no"))
                     .lit(() -> Boolean.TRUE.equals(camera.autoZoom))
                     .help("Que la camara apriete sola cuando la jugada se aleja. "
@@ -246,18 +270,20 @@ public final class DeskScreen extends Screen {
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleSmoothing(camera))
-                    .label(() -> "Suavidad: " + heredado(camera.smoothing == null,
-                            String.valueOf(camera.smoothing)))
-                    .help("Cuanto tarda la camara en alcanzar a quien sigue. 0 = clavada al "
-                            + "objetivo, 90 = muy perezosa, como el pulso de un camara de verdad."));
+                    .label(() -> "Se mueve: " + heredado(camera.smoothing == null,
+                            smoothingLabel(camera.smoothing)))
+                    .help("Como persigue la camara a su objetivo. SECA se clava en el al "
+                            + "instante, como un robot. SUAVE va un poco por detras, como el "
+                            + "pulso de un camara de verdad. Las de en medio, a gusto."));
             cursor += row + gap;
 
-            addDrawableChild(new ConsoleButton(x, cursor, half, row, "TRAER",
+            addDrawableChild(new ConsoleButton(x, cursor, half, row, "TRAER AQUI",
                     () -> director.moveHere(selected)).compact()
-                    .help("Mueve esta camara a donde estas tu ahora, mirando a donde miras."));
-            addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "APUNTAR",
+                    .help("Coge esta camara y la planta donde estas tu, mirando a donde miras."));
+            addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "ENCUADRAR",
                     () -> director.aimHere(selected)).compact()
-                    .help("Deja la camara donde esta pero le cambia el encuadre al tuyo."));
+                    .help("Deja la camara donde esta y solo le cambia hacia donde mira, "
+                            + "poniendola a mirar como estas mirando tu ahora."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, half, row, "SUBIR", () -> {
@@ -314,10 +340,12 @@ public final class DeskScreen extends Screen {
                     director.settings().hideDebugInBroadcast = !director.settings().hideDebugInBroadcast;
                     director.saveSettings();
                 }).compact()
-                .label(() -> "Hitboxes: " + (director.settings().hideDebugInBroadcast ? "no" : "si"))
-                .lit(() -> !director.settings().hideDebugInBroadcast)
-                .help("Si las hitboxes y demas ayudas de F3 salen o no en la emision. "
-                        + "En 'no' las sigues viendo tu, pero el espectador no."));
+                .label(() -> "Emision limpia: "
+                        + (director.settings().hideDebugInBroadcast ? "SI" : "NO"))
+                .lit(() -> director.settings().hideDebugInBroadcast)
+                .accent(Console.OK)
+                .help("En SI, las hitboxes y las ayudas de F3 se quedan solo en tu pantalla y "
+                        + "no salen en la emision. En NO salen tambien en la emision."));
     }
 
     /**
@@ -330,7 +358,7 @@ public final class DeskScreen extends Screen {
         int gap = 5;
         int buttonWidth = (width - gap * 3) / 4;
 
-        addDrawableChild(new ConsoleButton(x, y, buttonWidth, 20, "+ CAMARA", () -> {
+        addDrawableChild(new ConsoleButton(x, y, buttonWidth, 20, "NUEVA CAMARA AQUI", () -> {
             director.addHere(null);
             selected = director.cameras().size() - 1;
             rebuild();
@@ -340,7 +368,7 @@ public final class DeskScreen extends Screen {
         addDrawableChild(new ConsoleButton(x + buttonWidth + gap, y, buttonWidth, 20, "",
                 director::toggleWindow)
                 .compact()
-                .label(() -> "Emision: " + (director.window().isOpen() ? "ON" : "OFF"))
+                .label(() -> "Ventana OBS: " + (director.window().isOpen() ? "abierta" : "cerrada"))
                 .lit(() -> director.window().isOpen())
                 .accent(Console.TALLY)
                 .help("Abre o cierra la ventana TVCam, que es la que capturas en OBS."));
@@ -349,17 +377,19 @@ public final class DeskScreen extends Screen {
             director.settings().autoDirector = !director.settings().autoDirector;
             director.saveSettings();
         }).compact()
-                .label(() -> "Corta: " + (director.settings().autoDirector ? "el mod" : "tu"))
+                .label(() -> "Realiza: " + (director.settings().autoDirector ? "el mod" : "tu"))
                 .lit(() -> director.settings().autoDirector)
-                .help("En 'el mod', cambia solo al plano que mejor ve la jugada. "
-                        + "En 'tu', mandas tu con el numpad o pulsando dos veces un monitor."));
+                .help("Quien decide que plano sale al aire. En 'el mod', corta solo al que "
+                        + "mejor ve la jugada. En 'tu', mandas tu con el numpad o pulsando "
+                        + "dos veces un monitor."));
 
         addDrawableChild(new ConsoleButton(x + (buttonWidth + gap) * 3, y, buttonWidth, 20, "",
                 this::cycleGlobalTarget)
                 .compact()
-                .label(() -> "Comun: " + director.target().shortLabel())
-                .help("A quien enfocan las camaras que tengan puesto 'el comun'. "
-                        + "No toca a las que enfocan a alguien concreto."));
+                .label(() -> "Todas siguen a: " + director.target().shortLabel())
+                .help("El objetivo compartido. Las camaras que tengan 'Enfoca a: comun' "
+                        + "seguiran a quien pongas aqui. Las que enfoquen a alguien concreto "
+                        + "no se enteran de este boton."));
     }
 
     // --------------------------------------------------------------- acciones
@@ -367,10 +397,24 @@ public final class DeskScreen extends Screen {
     /** Nombres en castellano llano para los modos, que "acompanar" no dice nada. */
     private static String modeLabel(CameraMode mode) {
         return switch (mode) {
-            case FIJA -> "QUIETA";
+            case FIJA -> "FIJO";
             case SEGUIR -> "GIRA";
-            case ACOMPANAR -> "PERSIGUE";
+            case ACOMPANAR -> "DETRAS";
         };
+    }
+
+    /** El suavizado en palabras: un numero del 0 al 90 no le dice nada a nadie. */
+    private static String smoothingLabel(int value) {
+        if (value <= 5) {
+            return "seca";
+        }
+        if (value <= 30) {
+            return "rapida";
+        }
+        if (value <= 60) {
+            return "normal";
+        }
+        return "suave";
     }
 
     private static String heredado(boolean inherited, String value) {
