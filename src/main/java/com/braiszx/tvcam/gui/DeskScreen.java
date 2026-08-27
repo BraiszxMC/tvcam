@@ -270,17 +270,19 @@ public final class DeskScreen extends Screen {
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleSmoothing(camera))
-                    .label(() -> "Se mueve: " + heredado(camera.smoothing == null,
-                            smoothingLabel(camera.smoothing)))
+                    // Ojo: nada de heredado(cond, smoothingLabel(...)), que Java evalua
+                    // los dos argumentos y con el valor heredado (nulo) reventaba.
+                    .label(() -> "Se mueve: " + (camera.smoothing == null
+                            ? "comun" : smoothingLabel(camera.smoothing)))
                     .help("Como persigue la camara a su objetivo. SECA se clava en el al "
                             + "instante, como un robot. SUAVE va un poco por detras, como el "
                             + "pulso de un camara de verdad. Las de en medio, a gusto."));
             cursor += row + gap;
 
-            addDrawableChild(new ConsoleButton(x, cursor, half, row, "TRAER AQUI",
+            addDrawableChild(new ConsoleButton(x, cursor, half, row, "TRAER",
                     () -> director.moveHere(selected)).compact()
                     .help("Coge esta camara y la planta donde estas tu, mirando a donde miras."));
-            addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "ENCUADRAR",
+            addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "MIRAR",
                     () -> director.aimHere(selected)).compact()
                     .help("Deja la camara donde esta y solo le cambia hacia donde mira, "
                             + "poniendola a mirar como estas mirando tu ahora."));
@@ -340,8 +342,7 @@ public final class DeskScreen extends Screen {
                     director.settings().hideDebugInBroadcast = !director.settings().hideDebugInBroadcast;
                     director.saveSettings();
                 }).compact()
-                .label(() -> "Emision limpia: "
-                        + (director.settings().hideDebugInBroadcast ? "SI" : "NO"))
+                .label(() -> "Sin F3: " + (director.settings().hideDebugInBroadcast ? "SI" : "NO"))
                 .lit(() -> director.settings().hideDebugInBroadcast)
                 .accent(Console.OK)
                 .help("En SI, las hitboxes y las ayudas de F3 se quedan solo en tu pantalla y "
@@ -358,7 +359,7 @@ public final class DeskScreen extends Screen {
         int gap = 5;
         int buttonWidth = (width - gap * 3) / 4;
 
-        addDrawableChild(new ConsoleButton(x, y, buttonWidth, 20, "NUEVA CAMARA AQUI", () -> {
+        addDrawableChild(new ConsoleButton(x, y, buttonWidth, 20, "+ CAMARA", () -> {
             director.addHere(null);
             selected = director.cameras().size() - 1;
             rebuild();
@@ -368,7 +369,7 @@ public final class DeskScreen extends Screen {
         addDrawableChild(new ConsoleButton(x + buttonWidth + gap, y, buttonWidth, 20, "",
                 director::toggleWindow)
                 .compact()
-                .label(() -> "Ventana OBS: " + (director.window().isOpen() ? "abierta" : "cerrada"))
+                .label(() -> "OBS: " + (director.window().isOpen() ? "ON" : "OFF"))
                 .lit(() -> director.window().isOpen())
                 .accent(Console.TALLY)
                 .help("Abre o cierra la ventana TVCam, que es la que capturas en OBS."));
@@ -386,7 +387,7 @@ public final class DeskScreen extends Screen {
         addDrawableChild(new ConsoleButton(x + (buttonWidth + gap) * 3, y, buttonWidth, 20, "",
                 this::cycleGlobalTarget)
                 .compact()
-                .label(() -> "Todas siguen a: " + director.target().shortLabel())
+                .label(() -> "Siguen a: " + director.target().shortLabel())
                 .help("El objetivo compartido. Las camaras que tengan 'Enfoca a: comun' "
                         + "seguiran a quien pongas aqui. Las que enfoquen a alguien concreto "
                         + "no se enteran de este boton."));

@@ -78,7 +78,10 @@ public class ConsoleButton extends ClickableWidget {
         int textColor = on ? Console.TEXT : (hover ? Console.TEXT : Console.TEXT_DIM);
         int textY = getY() + (getHeight() - 8) / 2;
         if (compact) {
-            context.drawCenteredTextWithShadow(Console.font(), text,
+            // Recortado tambien aqui: sin esto una etiqueta larga se salia del
+            // boton y se montaba encima de la de al lado.
+            context.drawCenteredTextWithShadow(Console.font(),
+                    Console.font().trimToWidth(text, getWidth() - 6),
                     getX() + getWidth() / 2, textY, textColor);
         } else {
             int available = getWidth() - 12;
