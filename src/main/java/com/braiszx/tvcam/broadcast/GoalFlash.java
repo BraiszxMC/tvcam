@@ -51,6 +51,10 @@ public final class GoalFlash {
         }
         alpha = MathHelper.clamp(alpha, 0.0f, 1.0f);
 
+        String headline = CameraDirector.get().settings().goalText;
+        if (headline == null || headline.isBlank()) {
+            return;
+        }
         MinecraftClient client = MinecraftClient.getInstance();
         int width = context.getScaledWindowWidth();
         int height = context.getScaledWindowHeight();
@@ -66,7 +70,7 @@ public final class GoalFlash {
         // La entrada tiene un pequeno golpe de escala, como un rotulo de television.
         float pop = 1.0f + (1.0f - alpha) * 0.15f;
         matrices.scale(4.0f * pop, 4.0f * pop);
-        context.drawCenteredTextWithShadow(client.textRenderer, "GOL", 0, 0, withAlpha(WHITE, alpha));
+        context.drawCenteredTextWithShadow(client.textRenderer, headline, 0, 0, withAlpha(WHITE, alpha));
         matrices.popMatrix();
 
         int textY = baseY + 40;

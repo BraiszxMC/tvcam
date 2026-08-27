@@ -43,6 +43,9 @@ public final class TVCamSettings {
      */
     public boolean hideDebugInBroadcast = true;
 
+    /** El texto grande que sale al marcar. Vacio = no se canta el gol. */
+    public String goalText = "GOL";
+
     /** Realizador automatico: corta solo a la camara que mejor ve la jugada. */
     public boolean autoDirector = false;
     /** Segundos minimos que aguanta un plano antes de que el realizador corte a otro. */

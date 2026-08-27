@@ -42,9 +42,18 @@ public final class PreviewBank {
         if (slot.buffer == null) {
             return;
         }
-        // drawBlit escala la imagen del juego al tamano del monitor.
-        slot.buffer.drawBlit(source.getColorAttachmentView());
+        // Ojo con el sentido: framebuffer.drawBlit(destino) dibuja la textura DEL
+        // framebuffer DENTRO del destino. Es decir, hay que llamarlo sobre la
+        // imagen del juego pasandole el monitor, y no al reves. Al reves se pinta
+        // el monitor vacio encima del juego, que era el origen de la basura que
+        // salia en la emision.
+        source.drawBlit(slot.buffer.getColorAttachmentView());
         slot.hasImage = true;
+    }
+
+    /** El framebuffer de un monitor, para poder inspeccionarlo en la autoprueba. */
+    public net.minecraft.client.gl.Framebuffer buffer(int index) {
+        return index >= 0 && index < slots.size() ? slots.get(index).buffer : null;
     }
 
     public boolean hasImage(int index) {

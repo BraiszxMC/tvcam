@@ -29,6 +29,7 @@ public final class DeskScreen extends Screen {
 
     private final boolean openedByWand;
     private TextFieldWidget nameField;
+    private TextFieldWidget goalField;
     private int page;
 
     public DeskScreen(boolean openedByWand) {
@@ -71,8 +72,9 @@ public final class DeskScreen extends Screen {
         int gridRight = panelX - 12;
         int busTop = height - 78;
 
-        buildMultiviewer(cameras, gridLeft, gridTop, gridRight - gridLeft, busTop - gridTop - 40);
-        buildGeneralBar(gridLeft, busTop - 36, gridRight - gridLeft);
+        buildMultiviewer(cameras, gridLeft, gridTop, gridRight - gridLeft, busTop - gridTop - 84);
+        buildGoalBar(gridLeft, busTop - 68, gridRight - gridLeft);
+        buildGeneralBar(gridLeft, busTop - 40, gridRight - gridLeft);
         buildProgramBus(cameras, gridLeft, busTop, gridRight - gridLeft);
         // Se deja libre la franja de la barra de ayuda de abajo.
         buildPanel(panelX, gridTop, panelWidth, height - gridTop - margin - 18);
@@ -286,6 +288,38 @@ public final class DeskScreen extends Screen {
 
     }
 
+    /** El rotulo que sale al marcar: se escribe aqui y se prueba al momento. */
+    private void buildGoalBar(int x, int y, int width) {
+        CameraDirector director = CameraDirector.get();
+        int gap = 5;
+        int buttonWidth = (width - gap * 3) / 4;
+        int fieldWidth = buttonWidth * 2 + gap;
+
+        goalField = new TextFieldWidget(textRenderer, x + 74, y, fieldWidth - 74, 20,
+                Text.literal("Texto del gol"));
+        goalField.setMaxLength(24);
+        goalField.setText(director.settings().goalText);
+        goalField.setChangedListener(value -> {
+            director.settings().goalText = value;
+            director.saveSettings();
+        });
+        addDrawableChild(goalField);
+
+        addDrawableChild(new ConsoleButton(x + fieldWidth + gap, y, buttonWidth, 20, "PROBAR GOL",
+                () -> director.broadcast().testGoal()).compact()
+                .help("Lanza el rotulo de gol para ver como queda. Sale en la ventana de emision."));
+
+        addDrawableChild(new ConsoleButton(x + fieldWidth + buttonWidth + gap * 2, y, buttonWidth, 20, "",
+                () -> {
+                    director.settings().hideDebugInBroadcast = !director.settings().hideDebugInBroadcast;
+                    director.saveSettings();
+                }).compact()
+                .label(() -> "Hitboxes: " + (director.settings().hideDebugInBroadcast ? "no" : "si"))
+                .lit(() -> !director.settings().hideDebugInBroadcast)
+                .help("Si las hitboxes y demas ayudas de F3 salen o no en la emision. "
+                        + "En 'no' las sigues viendo tu, pero el espectador no."));
+    }
+
     /**
      * Los mandos que valen para toda la retransmision, en su propia fila: en el
      * panel de la camara no cabian y ademas se mezclaban con los ajustes de una
@@ -463,7 +497,9 @@ public final class DeskScreen extends Screen {
      */
     @Override
     public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
-        if (nameField == null || !nameField.isFocused()) {
+        boolean writing = (nameField != null && nameField.isFocused())
+                || (goalField != null && goalField.isFocused());
+        if (!writing) {
             int key = input.key();
             if (key >= org.lwjgl.glfw.GLFW.GLFW_KEY_KP_1 && key <= org.lwjgl.glfw.GLFW.GLFW_KEY_KP_9) {
                 int index = key - org.lwjgl.glfw.GLFW.GLFW_KEY_KP_1;
@@ -515,9 +551,12 @@ public final class DeskScreen extends Screen {
         Console.outline(context, panelX - 6, 34, panelWidth + 12, height - 48, Console.EDGE_SOFT);
 
         Console.sectionTitle(context, "CAMARA", panelX, 34, panelWidth);
-        Console.sectionTitle(context, "GENERAL", margin, height - 126, 120);
+        int busTop = height - 78;
+        Console.sectionTitle(context, "ROTULOS", margin, busTop - 80, 120);
+        context.drawText(Console.font(), "Al marcar:", margin, busTop - 62, Console.TEXT_DIM, false);
+        Console.sectionTitle(context, "GENERAL", margin, busTop - 52, 120);
         Console.sectionTitle(context, "MULTIVIEWER", margin, 32, 120);
-        Console.sectionTitle(context, "PROGRAMA", margin, height - 88, 120);
+        Console.sectionTitle(context, "PROGRAMA", margin, busTop - 12, 120);
     }
 
     private void renderLabels(DrawContext context) {

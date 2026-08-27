@@ -58,6 +58,16 @@ public final class SelfTest {
                 CameraDirector.get().window().requestCapture(
                         java.nio.file.Path.of(System.getProperty("tvcam.selftest.capture",
                                 "tvcam-selftest.png")));
+            } else if (ticks == 245) {
+                // Se vuelca un monitor a la ventana y se captura: asi se ve lo que
+                // lleva dentro de verdad, en vez de fiarse de que la copia funciona.
+                CameraDirector.get().setSelfTestPresenting(false);
+                if (CameraDirector.get().selfTestShowPreview(0)) {
+                    CameraDirector.get().window().requestCapture(
+                            java.nio.file.Path.of("tvcam-monitor.png"));
+                    CameraDirector.get().selfTestShowPreview(0);
+                    TVCam.LOGGER.info("[selftest] contenido del monitor 1 volcado");
+                }
             } else if (ticks == 250) {
                 int conImagen = 0;
                 for (int i = 0; i < CameraDirector.get().cameras().size(); i++) {

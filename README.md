@@ -91,7 +91,12 @@ veces por segundo a 256x144: son monitores de control, no la emision. Con la mes
 cerrada no se gasta ni un frame en esto.
 
 Un clic en un monitor lo selecciona para editarlo; **dos clics lo ponen al aire**,
-igual que las teclas del bus de programa o el numpad.
+igual que las teclas del bus de programa o el numpad, que tambien funcionan con la
+mesa abierta.
+
+En la fila **ROTULOS** se escribe el texto que sale al marcar (dejalo vacio y no se
+canta el gol), se prueba con **PROBAR GOL** sin esperar a que nadie marque, y se
+elige si las hitboxes salen o no en la emision.
 
 * **La emision sigue saliendo con la mesa abierta**, y ninguna pantalla del juego
   aparece en la emision: puedes tocar ajustes viendo el resultado en directo en la

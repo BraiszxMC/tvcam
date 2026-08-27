@@ -739,6 +739,15 @@ public final class CameraDirector {
         selfTestPresenting = value;
     }
 
+    /**
+     * Solo para la autoprueba: manda a la ventana de emision el contenido de un
+     * monitor, para poder capturarlo y comprobar que de verdad lleva imagen.
+     */
+    public boolean selfTestShowPreview(int index) {
+        Framebuffer buffer = previews.buffer(index);
+        return buffer != null && window.present(buffer);
+    }
+
     /** Solo para la autoprueba: manda el frame actual a la ventana de emision. */
     public void selfTestPresent() {
         if (!selfTestPresenting) {
