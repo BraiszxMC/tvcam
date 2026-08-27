@@ -22,10 +22,12 @@ public class InGameHudMixin {
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void tvcam$broadcastGraphics(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         CameraDirector director = CameraDirector.get();
-        if (!director.isCameraFrame()) {
+        if (!director.isBroadcastFrame()) {
             return;
         }
-        director.broadcast().render(context);
+        if (director.isCameraFrame()) {
+            director.broadcast().render(context);
+        }
         ci.cancel();
     }
 

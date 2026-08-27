@@ -8,54 +8,48 @@ import com.braiszx.tvcam.camera.TargetTracker;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.entity.Entity;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * La mesa de realizacion: la lista de planos a la izquierda y todos los ajustes
- * de la camara seleccionada a la derecha.
+ * La mesa de realizacion: multiviewer arriba con la imagen de cada camara, bus de
+ * programa abajo y el panel de la camara seleccionada a la derecha.
  *
- * <p>La emision sigue saliendo mientras la mesa esta abierta (los frames de
- * camara no dibujan ninguna pantalla), asi que puedes tocar ajustes viendo el
- * resultado en la ventana de emision en tiempo real.
+ * <p>Los monitores no son una captura: el realizador dedica de vez en cuando un
+ * frame a dibujar el mundo desde cada camara y guarda esa imagen reducida. Por eso
+ * se refrescan un par de veces por segundo y no a la velocidad del juego: son
+ * monitores de control, no la emision.
  */
 public final class DeskScreen extends Screen {
-    private static final int ROW_HEIGHT = 22;
-    private static final int LIST_WIDTH = 150;
-    private static final int LIVE_WIDTH = 46;
-    private static final int PANEL_GAP = 16;
-    /** Alto reservado abajo para la barra de controles generales. */
-    private static final int BOTTOM_BAR_HEIGHT = 56;
+    private static int selected;
 
-    private static final int LIVE_COLOR = 0xFFFF5555;
-    private static final int MUTED = 0xFFAAAAAA;
-
-    private final List<ButtonWidget> rowButtons = new ArrayList<>();
-    private TextFieldWidget nameField;
-    private int selected;
-    private int scroll;
-    private int visibleRows;
-
-    /** true si la abrio el item de la mano, para cerrarla al guardarlo. */
     private final boolean openedByWand;
+    private TextFieldWidget nameField;
+    private int page;
+    /** Donde empieza el bloque de controles generales, para la serigrafia. */
+    private int generalTop;
 
     public DeskScreen(boolean openedByWand) {
         super(Text.literal("Mesa de realizacion"));
         this.openedByWand = openedByWand;
-        this.selected = Math.max(0, CameraDirector.get().activeIndex());
+        int active = CameraDirector.get().activeIndex();
+        if (active >= 0) {
+            selected = active;
+        }
+    }
+
+    public static int selectedIndex() {
+        return selected;
     }
 
     public boolean openedByWand() {
         return openedByWand;
     }
 
-    /** La mesa no debe pausar la partida: se retransmite mientras esta abierta. */
     @Override
     public boolean shouldPause() {
         return false;
@@ -64,221 +58,293 @@ public final class DeskScreen extends Screen {
     @Override
     protected void init() {
         CameraDirector director = CameraDirector.get();
+        director.setPreviewsWanted(true);
+
         List<CameraPoint> cameras = director.cameras();
         if (selected >= cameras.size()) {
             selected = Math.max(0, cameras.size() - 1);
         }
 
-        int listX = 20;
-        int listTop = 46;
-        int listBottom = height - BOTTOM_BAR_HEIGHT - 14;
-        visibleRows = Math.max(1, (listBottom - listTop) / ROW_HEIGHT);
-        scroll = Math.clamp(scroll, 0, Math.max(0, cameras.size() - visibleRows));
-        if (selected < scroll) {
-            scroll = selected;
-        } else if (selected >= scroll + visibleRows) {
-            scroll = selected - visibleRows + 1;
-        }
+        int margin = 10;
+        int panelWidth = Math.clamp(width / 4, 96, 132);
+        int panelX = width - margin - panelWidth;
+        int gridLeft = margin;
+        int gridTop = 40;
+        int gridRight = panelX - 12;
+        int busTop = height - 62;
 
-        rowButtons.clear();
-        for (int row = 0; row < visibleRows; row++) {
-            int index = scroll + row;
-            if (index >= cameras.size()) {
-                break;
-            }
-            CameraPoint camera = cameras.get(index);
-            int y = listTop + row * ROW_HEIGHT;
-            boolean isSelected = index == selected;
-            boolean isLive = index == director.activeIndex();
-
-            String label = (index + 1) + ". " + trim(camera.name(), 14);
-            ButtonWidget row0 = ButtonWidget.builder(
-                            Text.literal(label).formatted(isSelected ? Formatting.YELLOW : Formatting.WHITE),
-                            button -> select(index))
-                    .dimensions(listX, y, LIST_WIDTH, 20).build();
-            addDrawableChild(row0);
-            rowButtons.add(row0);
-
-            addDrawableChild(ButtonWidget.builder(
-                            Text.literal(isLive ? "AIRE" : "cortar")
-                                    .formatted(isLive ? Formatting.RED : Formatting.GRAY),
-                            button -> {
-                                director.cut(index);
-                                rebuild();
-                            })
-                    .dimensions(listX + LIST_WIDTH + 4, y, LIVE_WIDTH, 20).build());
-        }
-
-        if (cameras.size() > visibleRows) {
-            addDrawableChild(ButtonWidget.builder(Text.literal("▲"), b -> {
-                scroll = Math.max(0, scroll - visibleRows);
-                rebuild();
-            }).dimensions(listX + LIST_WIDTH + LIVE_WIDTH + 8, listTop, 20, 20).build());
-            addDrawableChild(ButtonWidget.builder(Text.literal("▼"), b -> {
-                scroll = Math.min(Math.max(0, cameras.size() - visibleRows), scroll + visibleRows);
-                rebuild();
-            }).dimensions(listX + LIST_WIDTH + LIVE_WIDTH + 8, listTop + 24, 20, 20).build());
-        }
-
-        buildEditor(cameras);
-        buildBottomBar();
+        buildMultiviewer(cameras, gridLeft, gridTop, gridRight - gridLeft, busTop - gridTop - 10);
+        buildProgramBus(cameras, gridLeft, busTop, gridRight - gridLeft);
+        buildPanel(panelX, gridTop, panelWidth, height - gridTop - margin);
     }
 
-    private void buildEditor(List<CameraPoint> cameras) {
-        CameraDirector director = CameraDirector.get();
-        CameraPoint camera = director.at(selected);
-        if (camera == null) {
+    // ------------------------------------------------------------ multiviewer
+
+    private void buildMultiviewer(List<CameraPoint> cameras, int x, int y, int width, int height) {
+        if (cameras.isEmpty()) {
             return;
         }
-        int panelX = 20 + LIST_WIDTH + LIVE_WIDTH + PANEL_GAP + 20;
-        int panelWidth = Math.min(220, width - panelX - 20);
-        int half = (panelWidth - 4) / 2;
-
-        // Nueve filas de ajustes que tienen que caber por encima de la barra de
-        // abajo sea cual sea el tamano de la ventana y la escala de la interfaz.
-        int top = 46;
-        int bottom = height - BOTTOM_BAR_HEIGHT;
-        int rows = 9;
-        int step = Math.clamp((bottom - top) / rows, 16, 24);
-        int buttonHeight = Math.max(12, step - 4);
-        int y = top;
-
-        nameField = new TextFieldWidget(textRenderer, panelX, y, panelWidth, buttonHeight,
-                Text.literal("Nombre"));
-        nameField.setText(camera.name());
-        nameField.setChangedListener(value -> {
-            if (!value.isBlank()) {
-                camera.name = value;
-                director.touch();
+        int gap = 5;
+        // Se busca la rejilla que consiga meter todas las camaras a la vez: se
+        // prueban distribuciones de menos a mas columnas y se coge la primera que
+        // las muestre todas, que es la de monitores mas grandes. Si no cabe
+        // ninguna, la que mas quepan y el resto por paginas.
+        int wanted = cameras.size();
+        int columns = 1;
+        int tileWidth = 0;
+        int tileHeight = 0;
+        int rows = 1;
+        int bestSlots = -1;
+        for (int candidate = 1; candidate <= 5; candidate++) {
+            int candidateWidth = (width - gap * (candidate - 1)) / candidate;
+            if (candidateWidth < 56) {
+                break;
             }
-        });
-        addDrawableChild(nameField);
-        y += step;
-
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Modo: " + camera.mode().name().toLowerCase()),
-                        b -> cycleMode(camera))
-                .dimensions(panelX, y, panelWidth, buttonHeight).build());
-        y += step;
-
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Sigue a: " + camera.target().shortLabel()),
-                        b -> cycleTarget(camera))
-                .dimensions(panelX, y, panelWidth, buttonHeight).build());
-        y += step;
-
-        addDrawableChild(ButtonWidget.builder(Text.literal("Zoom -"), b -> {
-            camera.zoom = Math.clamp(camera.zoom - 0.25f, 1.0f, 10.0f);
-            director.touch();
-            rebuild();
-        }).dimensions(panelX, y, half, buttonHeight).build());
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal(String.format("x%.2f +", camera.zoom())), b -> {
-                            camera.zoom = Math.clamp(camera.zoom + 0.25f, 1.0f, 10.0f);
-                            director.touch();
-                            rebuild();
-                        })
-                .dimensions(panelX + half + 4, y, half, buttonHeight).build());
-        y += step;
-
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Zoom auto: " + (camera.autoZoom == null ? "general"
-                                : camera.autoZoom ? "si" : "no")),
-                        b -> cycleAutoZoom(camera))
-                .dimensions(panelX, y, panelWidth, buttonHeight).build());
-        y += step;
-
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Pulso: " + (camera.smoothing == null ? "general"
-                                : String.valueOf(camera.smoothing))),
-                        b -> cycleSmoothing(camera))
-                .dimensions(panelX, y, panelWidth, buttonHeight).build());
-        y += step;
-
-        addDrawableChild(ButtonWidget.builder(Text.literal("Traer aqui"), b -> {
-            director.moveHere(selected);
-            rebuild();
-        }).dimensions(panelX, y, half, buttonHeight).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Reapuntar"), b -> {
-            director.aimHere(selected);
-            rebuild();
-        }).dimensions(panelX + half + 4, y, half, buttonHeight).build());
-        y += step;
-
-        addDrawableChild(ButtonWidget.builder(Text.literal("Subir"), b -> {
-            if (director.move(selected, -1)) {
-                selected--;
+            int candidateHeight = candidateWidth * 9 / 16 + 12;
+            int candidateRows = Math.max(1, (height + gap) / (candidateHeight + gap));
+            int slots = candidate * candidateRows;
+            if (slots > bestSlots) {
+                bestSlots = slots;
+                columns = candidate;
+                tileWidth = candidateWidth;
+                tileHeight = candidateHeight;
+                rows = candidateRows;
             }
-            rebuild();
-        }).dimensions(panelX, y, half, buttonHeight).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Bajar"), b -> {
-            if (director.move(selected, 1)) {
-                selected++;
+            if (slots >= wanted) {
+                columns = candidate;
+                tileWidth = candidateWidth;
+                tileHeight = candidateHeight;
+                rows = candidateRows;
+                break;
             }
-            rebuild();
-        }).dimensions(panelX + half + 4, y, half, buttonHeight).build());
-        y += step;
+        }
+        int perPage = columns * rows;
+        int pages = Math.max(1, (cameras.size() + perPage - 1) / perPage);
+        page = Math.clamp(page, 0, pages - 1);
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("Duplicar"), b -> {
-            director.duplicate(selected);
-            rebuild();
-        }).dimensions(panelX, y, half, buttonHeight).build());
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Borrar").formatted(Formatting.RED), b -> {
-                            director.remove(selected);
-                            selected = Math.max(0, selected - 1);
-                            rebuild();
-                        })
-                .dimensions(panelX + half + 4, y, half, buttonHeight).build());
+        if ("1".equals(System.getenv("TVCAM_SELFTEST"))) {
+            com.braiszx.tvcam.TVCam.LOGGER.info(
+                    "[selftest] rejilla: area {}x{} camaras={} -> {} columnas x {} filas (tile {}x{})",
+                    width, height, cameras.size(), columns, rows, tileWidth, tileHeight);
+        }
+        int first = page * perPage;
+        for (int slot = 0; slot < perPage && first + slot < cameras.size(); slot++) {
+            int index = first + slot;
+            int column = slot % columns;
+            int row = slot / columns;
+            int tileX = x + column * (tileWidth + gap);
+            int tileY = y + row * (tileHeight + gap);
+            addDrawableChild(new MonitorTile(tileX, tileY, tileWidth, tileHeight, index,
+                    () -> select(index),
+                    () -> {
+                        CameraDirector.get().cut(index);
+                        select(index);
+                    }));
+        }
+
+        if (pages > 1) {
+            addDrawableChild(new ConsoleButton(x, y + rows * (tileHeight + gap), 60, 16,
+                    "< pagina", () -> {
+                page = (page - 1 + pages) % pages;
+                rebuild();
+            }).compact());
+            addDrawableChild(new ConsoleButton(x + 66, y + rows * (tileHeight + gap), 60, 16,
+                    "pagina >", () -> {
+                page = (page + 1) % pages;
+                rebuild();
+            }).compact());
+        }
     }
 
-    private void buildBottomBar() {
+    /** El bus de programa: una tecla por camara, como la fila de un mezclador. */
+    private void buildProgramBus(List<CameraPoint> cameras, int x, int y, int width) {
         CameraDirector director = CameraDirector.get();
-        int y = height - BOTTOM_BAR_HEIGHT + 8;
-        int gap = 6;
-        int buttonWidth = (width - 40 - gap * 3) / 4;
-        int x = 20;
+        int count = Math.max(1, Math.min(cameras.size(), 9));
+        int gap = 4;
+        int keyWidth = Math.min(52, (width - gap * count) / Math.max(count + 1, 4));
+        int keyX = x;
+        for (int i = 0; i < count; i++) {
+            int index = i;
+            addDrawableChild(new ConsoleButton(keyX, y, keyWidth, 26, String.valueOf(i + 1), () -> {
+                director.cut(index);
+                select(index);
+            }).compact().accent(Console.TALLY).lit(() -> director.activeIndex() == index));
+            keyX += keyWidth + gap;
+        }
+        addDrawableChild(new ConsoleButton(keyX + 8, y, 46, 26, "NEGRO", () -> {
+            director.cut(-1);
+            rebuild();
+        }).compact().lit(() -> director.activeIndex() < 0));
+    }
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("+ Camara aqui"), b -> {
+    // ------------------------------------------------------------------ panel
+
+    private void buildPanel(int x, int y, int width, int height) {
+        CameraDirector director = CameraDirector.get();
+        CameraPoint camera = director.at(selected);
+
+        // Trece filas tienen que caber en el panel sea cual sea la escala de la
+        // interfaz: se calcula el alto de fila a partir del sitio que hay, en vez
+        // de anclar unos controles arriba y otros abajo y que se pisen.
+        int cameraRows = camera == null ? 0 : 9;
+        int generalRows = 4;
+        int separators = camera == null ? 1 : 2;
+        int gap = 3;
+        int totalRows = cameraRows + generalRows;
+        int available = height - 12 - separators * 8;
+        int row = Math.clamp(available / Math.max(1, totalRows) - gap, 11, 18);
+        int half = (width - gap) / 2;
+        int cursor = y + 8;
+
+        if (camera != null) {
+            nameField = new TextFieldWidget(textRenderer, x + 1, cursor, width - 2, row,
+                    Text.literal("Nombre"));
+            nameField.setText(camera.name());
+            nameField.setDrawsBackground(false);
+            nameField.setChangedListener(value -> {
+                if (!value.isBlank()) {
+                    camera.name = value;
+                    director.touch();
+                }
+            });
+            addDrawableChild(nameField);
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleMode(camera))
+                    .label(() -> "Modo  " + camera.mode().name().toLowerCase()));
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleTarget(camera))
+                    .label(() -> "Sigue  " + camera.target().shortLabel()));
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, half, row, "ZOOM -", () -> {
+                camera.zoom = Math.clamp(camera.zoom - 0.25f, 1.0f, 10.0f);
+                director.touch();
+            }).compact());
+            addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "", () -> {
+                camera.zoom = Math.clamp(camera.zoom + 0.25f, 1.0f, 10.0f);
+                director.touch();
+            }).compact().label(() -> String.format("x%.2f +", camera.zoom())));
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleAutoZoom(camera))
+                    .label(() -> "Zoom auto  " + (camera.autoZoom == null ? "general"
+                            : camera.autoZoom ? "si" : "no"))
+                    .lit(() -> Boolean.TRUE.equals(camera.autoZoom)));
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> cycleSmoothing(camera))
+                    .label(() -> "Pulso  " + (camera.smoothing == null ? "general"
+                            : String.valueOf(camera.smoothing))));
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, half, row, "TRAER",
+                    () -> director.moveHere(selected)).compact());
+            addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "APUNTAR",
+                    () -> director.aimHere(selected)).compact());
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, half, row, "SUBIR", () -> {
+                if (director.move(selected, -1)) {
+                    selected--;
+                }
+                rebuild();
+            }).compact());
+            addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "BAJAR", () -> {
+                if (director.move(selected, 1)) {
+                    selected++;
+                }
+                rebuild();
+            }).compact());
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, half, row, "COPIAR", () -> {
+                director.duplicate(selected);
+                rebuild();
+            }).compact());
+            addDrawableChild(new ConsoleButton(x + half + gap, cursor, half, row, "BORRAR", () -> {
+                director.remove(selected);
+                selected = Math.max(0, selected - 1);
+                rebuild();
+            }).compact().accent(Console.TALLY));
+            cursor += row + gap + 8;
+        }
+
+        generalTop = cursor;
+
+        addDrawableChild(new ConsoleButton(x, cursor, width, row, "+ CAMARA AQUI", () -> {
             director.addHere(null);
             selected = director.cameras().size() - 1;
             rebuild();
-        }).dimensions(x, y, buttonWidth, 20).build());
-        x += buttonWidth + gap;
+        }).compact().accent(Console.OK));
+        cursor += row + gap;
 
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Ventana: " + (director.window().isOpen() ? "ON" : "OFF")), b -> {
-                            director.toggleWindow();
-                            rebuild();
-                        })
-                .dimensions(x, y, buttonWidth, 20).build());
-        x += buttonWidth + gap;
+        addDrawableChild(new ConsoleButton(x, cursor, width, row, "", director::toggleWindow)
+                .label(() -> "Emision  " + (director.window().isOpen() ? "ON" : "OFF"))
+                .lit(() -> director.window().isOpen())
+                .accent(Console.TALLY));
+        cursor += row + gap;
 
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("Auto: " + (director.settings().autoDirector ? "ON" : "OFF")),
-                        b -> {
-                            director.settings().autoDirector = !director.settings().autoDirector;
-                            director.saveSettings();
-                            rebuild();
-                        })
-                .dimensions(x, y, buttonWidth, 20).build());
-        x += buttonWidth + gap;
+        addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> {
+            director.settings().autoDirector = !director.settings().autoDirector;
+            director.saveSettings();
+        }).label(() -> "Realizador  " + (director.settings().autoDirector ? "auto" : "manual"))
+                .lit(() -> director.settings().autoDirector));
+        cursor += row + gap;
 
-        addDrawableChild(ButtonWidget.builder(
-                        Text.literal("General: " + director.target().shortLabel()),
-                        b -> {
-                            cycleGlobalTarget();
-                            rebuild();
-                        })
-                .dimensions(x, y, buttonWidth, 20).build());
-
-        addDrawableChild(ButtonWidget.builder(Text.literal("Cerrar"), b -> close())
-                .dimensions(width / 2 - 50, height - 26, 100, 20).build());
+        addDrawableChild(new ConsoleButton(x, cursor, width, row, "", this::cycleGlobalTarget)
+                .label(() -> "General  " + director.target().shortLabel()));
     }
 
-    // ------------------------------------------------------------- acciones
+    // --------------------------------------------------------------- acciones
 
-    /** Recorre el objetivo general: pelota -> cada jugador -> nadie. */
+    private void select(int index) {
+        selected = index;
+        rebuild();
+    }
+
+    private void cycleMode(CameraPoint camera) {
+        CameraMode[] modes = CameraMode.values();
+        CameraMode next = modes[(camera.mode().ordinal() + 1) % modes.length];
+        camera.mode = next;
+        if (next == CameraMode.ACOMPANAR) {
+            Entity entity = CameraDirector.get().target().resolve(camera.target());
+            camera.setOffset(entity == null ? camera.offset()
+                    : camera.pos().subtract(entity.getBoundingBox().getCenter()));
+        }
+        CameraDirector.get().touch();
+    }
+
+    private void cycleTarget(CameraPoint camera) {
+        TargetSpec spec = camera.target();
+        List<String> players = onlinePlayers();
+        switch (spec.kind) {
+            case GLOBAL -> camera.target = TargetSpec.ball();
+            case PELOTA -> camera.target = players.isEmpty()
+                    ? TargetSpec.none() : TargetSpec.player(players.get(0));
+            case JUGADOR -> {
+                int index = players.indexOf(spec.player);
+                camera.target = (index >= 0 && index + 1 < players.size())
+                        ? TargetSpec.player(players.get(index + 1)) : TargetSpec.none();
+            }
+            case NINGUNO -> camera.target = TargetSpec.global();
+        }
+        CameraDirector.get().touch();
+    }
+
+    private void cycleAutoZoom(CameraPoint camera) {
+        camera.autoZoom = camera.autoZoom == null ? Boolean.TRUE
+                : camera.autoZoom ? Boolean.FALSE : null;
+        CameraDirector.get().touch();
+    }
+
+    private void cycleSmoothing(CameraPoint camera) {
+        camera.smoothing = camera.smoothing == null ? 0
+                : camera.smoothing >= 90 ? null : camera.smoothing + 15;
+        CameraDirector.get().touch();
+    }
+
     private void cycleGlobalTarget() {
         TargetTracker tracker = CameraDirector.get().target();
         List<String> players = onlinePlayers();
@@ -303,74 +369,6 @@ public final class DeskScreen extends Screen {
         }
     }
 
-    private void select(int index) {
-        selected = index;
-        rebuild();
-    }
-
-    private void cycleMode(CameraPoint camera) {
-        CameraMode[] modes = CameraMode.values();
-        CameraMode next = modes[(camera.mode().ordinal() + 1) % modes.length];
-        camera.mode = next;
-        if (next == CameraMode.ACOMPANAR) {
-            // Mantiene la distancia que hay ahora mismo con su objetivo.
-            Entity entity = CameraDirector.get().target().resolve(camera.target());
-            camera.setOffset(entity == null ? camera.offset()
-                    : camera.pos().subtract(entity.getBoundingBox().getCenter()));
-        }
-        CameraDirector.get().touch();
-        rebuild();
-    }
-
-    /**
-     * Recorre: general -> pelota -> cada jugador conectado -> nadie. Asi se elige
-     * a quien sigue cada camara sin tener que escribir nombres.
-     */
-    private void cycleTarget(CameraPoint camera) {
-        TargetSpec spec = camera.target();
-        List<String> players = onlinePlayers();
-        switch (spec.kind) {
-            case GLOBAL -> camera.target = TargetSpec.ball();
-            case PELOTA -> camera.target = players.isEmpty()
-                    ? TargetSpec.none() : TargetSpec.player(players.get(0));
-            case JUGADOR -> {
-                int index = players.indexOf(spec.player);
-                if (index >= 0 && index + 1 < players.size()) {
-                    camera.target = TargetSpec.player(players.get(index + 1));
-                } else {
-                    camera.target = TargetSpec.none();
-                }
-            }
-            case NINGUNO -> camera.target = TargetSpec.global();
-        }
-        CameraDirector.get().touch();
-        rebuild();
-    }
-
-    private void cycleAutoZoom(CameraPoint camera) {
-        if (camera.autoZoom == null) {
-            camera.autoZoom = Boolean.TRUE;
-        } else if (camera.autoZoom) {
-            camera.autoZoom = Boolean.FALSE;
-        } else {
-            camera.autoZoom = null;
-        }
-        CameraDirector.get().touch();
-        rebuild();
-    }
-
-    private void cycleSmoothing(CameraPoint camera) {
-        if (camera.smoothing == null) {
-            camera.smoothing = 0;
-        } else if (camera.smoothing >= 90) {
-            camera.smoothing = null;
-        } else {
-            camera.smoothing = camera.smoothing + 15;
-        }
-        CameraDirector.get().touch();
-        rebuild();
-    }
-
     private static List<String> onlinePlayers() {
         List<String> names = new ArrayList<>();
         MinecraftClient client = MinecraftClient.getInstance();
@@ -386,37 +384,73 @@ public final class DeskScreen extends Screen {
         init();
     }
 
-    private static String trim(String text, int max) {
-        return text.length() <= max ? text : text.substring(0, max - 1) + "…";
-    }
-
-    // -------------------------------------------------------------- dibujo
+    // ----------------------------------------------------------------- dibujo
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        renderChrome(context);
         super.render(context, mouseX, mouseY, delta);
-        context.drawCenteredTextWithShadow(textRenderer,
-                Text.literal("MESA DE REALIZACION").formatted(Formatting.BOLD), width / 2, 16, 0xFFFFFFFF);
+        renderLabels(context);
+    }
 
+    /** El mueble: cabecera, paneles y serigrafia. */
+    private void renderChrome(DrawContext context) {
         CameraDirector director = CameraDirector.get();
-        CameraPoint live = director.activeCamera();
-        String status = live == null
-                ? "Nada al aire"
-                : "AL AIRE: " + (director.activeIndex() + 1) + " · " + live.name();
-        context.drawCenteredTextWithShadow(textRenderer, status, width / 2, 30,
-                live == null ? MUTED : LIVE_COLOR);
+        int margin = 10;
+        int panelWidth = Math.clamp(width / 4, 96, 132);
+        int panelX = width - margin - panelWidth;
 
+        context.fill(0, 0, width, 28, Console.PANEL);
+        context.fill(0, 28, width, 29, Console.EDGE);
+
+        context.drawText(Console.font(), "TVCam", margin, 10, Console.TEXT, false);
+        context.drawText(Console.font(), "MESA DE REALIZACION",
+                margin + Console.font().getWidth("TVCam") + 8, 10, Console.TEXT_FAINT, false);
+
+        CameraPoint live = director.activeCamera();
+        String status = live == null ? "NEGRO" : "AL AIRE  " + (director.activeIndex() + 1)
+                + "  " + live.name();
+        int statusWidth = Console.font().getWidth(status);
+        Console.tallyLamp(context, width - margin - statusWidth - 12, 10, live != null);
+        context.drawText(Console.font(), status, width - margin - statusWidth, 10,
+                live == null ? Console.TEXT_FAINT : Console.TALLY, false);
+
+        // Panel lateral y su serigrafia.
+        Console.panel(context, panelX - 6, 34, panelWidth + 12, height - 48, Console.PANEL);
+        Console.outline(context, panelX - 6, 34, panelWidth + 12, height - 48, Console.EDGE_SOFT);
+
+        Console.sectionTitle(context, "CAMARA", panelX, 34, panelWidth);
+        if (generalTop > 0) {
+            Console.sectionTitle(context, "GENERAL", panelX, generalTop - 9, panelWidth);
+        }
+        Console.sectionTitle(context, "MULTIVIEWER", margin, 32, 120);
+        Console.sectionTitle(context, "PROGRAMA", margin, height - 74, 120);
+    }
+
+    private void renderLabels(DrawContext context) {
+        CameraDirector director = CameraDirector.get();
         CameraPoint camera = director.at(selected);
-        if (camera != null) {
-            String detail = String.format("%s · sigue a %s · zoom x%.2f",
-                    camera.mode().name().toLowerCase(), camera.target().shortLabel(), camera.zoom());
-            context.drawTextWithShadow(textRenderer, detail, 20, height - BOTTOM_BAR_HEIGHT - 10, MUTED);
+        if (camera == null) {
+            context.drawCenteredTextWithShadow(Console.font(),
+                    "No hay camaras: pulsa + CAMARA AQUI", width / 2, height / 2 - 4,
+                    Console.TEXT_DIM);
         }
     }
 
     @Override
     public void renderBackground(DrawContext context, int mouseX, int mouseY, float delta) {
-        // Fondo semitransparente: la mesa se usa mirando el juego por detras.
-        context.fill(0, 0, width, height, 0xB0101010);
+        context.fill(0, 0, width, height, Console.BACKDROP);
+    }
+
+    @Override
+    public void close() {
+        CameraDirector.get().setPreviewsWanted(false);
+        super.close();
+    }
+
+    @Override
+    public void removed() {
+        CameraDirector.get().setPreviewsWanted(false);
+        super.removed();
     }
 }

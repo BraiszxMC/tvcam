@@ -18,7 +18,7 @@ public class ScreenMixin {
     @Inject(method = "renderWithTooltip", at = @At("HEAD"), cancellable = true)
     private void tvcam$hideFromBroadcast(DrawContext context, int mouseX, int mouseY, float delta,
                                          CallbackInfo ci) {
-        if (CameraDirector.get().isCameraFrame()) {
+        if (CameraDirector.get().isBroadcastFrame()) {
             ci.cancel();
         }
     }

@@ -78,10 +78,21 @@ Y ya esta: capturas la ventana `TVCam` en OBS y tienes un partido realizado.
 
 ### La mesa de realizacion
 
-Tecla **M** (o `/tvcam desk`) y se abre la mesa: los planos a la izquierda, todos
-los ajustes de la camara elegida a la derecha, y los controles generales abajo.
+Tecla **M** (o `/tvcam desk`) y se abre la mesa, con aspecto de mezclador de
+video: **multiviewer** arriba con la imagen de cada camara, **bus de programa**
+abajo con una tecla por plano y piloto de tally rojo en el que esta al aire, y el
+panel de la camara seleccionada a la derecha.
 
-* Pulsa un plano para editarlo, o **cortar** para ponerlo al aire.
+**Los monitores son imagen de verdad, no un icono.** Una miniatura no se puede
+"capturar": el mundo hay que dibujarlo desde esa camara. Por eso, mientras la mesa
+esta abierta, el realizador dedica **uno de cada cuatro frames** a refrescar el
+monitor de una camara, rotando entre todas. Cada monitor se renueva un par de
+veces por segundo a 256x144: son monitores de control, no la emision. Con la mesa
+cerrada no se gasta ni un frame en esto.
+
+Un clic en un monitor lo selecciona para editarlo; **dos clics lo ponen al aire**,
+igual que las teclas del bus de programa o el numpad.
+
 * **La emision sigue saliendo con la mesa abierta**, y ninguna pantalla del juego
   aparece en la emision: puedes tocar ajustes viendo el resultado en directo en la
   ventana que captura OBS. Tampoco pausa la partida en un mundo propio.

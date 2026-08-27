@@ -4,6 +4,7 @@ import com.braiszx.tvcam.TVCam;
 import com.braiszx.tvcam.broadcast.BroadcastDirector;
 import com.braiszx.tvcam.render.CameraWindow;
 import com.braiszx.tvcam.render.FrameMirror;
+import com.braiszx.tvcam.render.PreviewBank;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.entity.Entity;
@@ -37,9 +38,15 @@ public final class CameraDirector {
     private final FrameMirror mirror = new FrameMirror();
     private final TargetTracker target = new TargetTracker();
     private final BroadcastDirector broadcast = new BroadcastDirector();
+    private final PreviewBank previews = new PreviewBank();
 
     private int active = -1;
     private boolean cameraFrame;
+    /** Camara cuya miniatura se esta dibujando en este frame, o -1. */
+    private int previewFrame = -1;
+    /** Cuantas camaras quieren miniatura (la mesa abierta las pide). */
+    private boolean previewsWanted;
+    private int previewCursor;
     private long frameCounter;
 
     /** Pose y zoom con los que se esta dibujando la emision ahora mismo. */
@@ -80,6 +87,32 @@ public final class CameraDirector {
 
     public BroadcastDirector broadcast() {
         return broadcast;
+    }
+
+    public PreviewBank previews() {
+        return previews;
+    }
+
+    /** La mesa avisa de que quiere monitores; sin mesa abierta no se gasta un frame. */
+    public void setPreviewsWanted(boolean wanted) {
+        previewsWanted = wanted;
+    }
+
+    /** true si en este frame se esta dibujando el mundo para un monitor. */
+    public int previewIndex() {
+        return previewFrame;
+    }
+
+    public boolean isPreviewFrame() {
+        return previewFrame >= 0;
+    }
+
+    /**
+     * true si lo que se dibuja en este frame es para la emision o para un monitor:
+     * en ambos casos no debe salir el HUD, ni la mano, ni ninguna pantalla.
+     */
+    public boolean isBroadcastFrame() {
+        return cameraFrame || previewFrame >= 0;
     }
 
     // ---------------------------------------------------------------- camaras
@@ -362,6 +395,12 @@ public final class CameraDirector {
      * sola pose.
      */
     public CameraPose poseFor(float tickDelta) {
+        if (previewFrame >= 0) {
+            // Los monitores van sin suavizado ni travelling: son una foto fija de
+            // lo que veria esa camara ahora mismo, y no deben tocar el estado de la
+            // camara que esta al aire.
+            return previewPose(previewFrame, tickDelta);
+        }
         CameraPoint camera = activeCamera();
         if (camera == null) {
             return null;
@@ -385,6 +424,30 @@ public final class CameraDirector {
             currentZoom = zoom;
         }
         return current;
+    }
+
+    private CameraPose previewPose(int index, float tickDelta) {
+        CameraPoint camera = at(index);
+        if (camera == null) {
+            return null;
+        }
+        CameraPose fixed = new CameraPose(camera.pos(), camera.yaw(), camera.pitch());
+        if (!camera.mode().needsTarget()) {
+            return fixed;
+        }
+        Entity entity = target.resolve(camera.target());
+        if (entity == null) {
+            return fixed;
+        }
+        Vec3d aim = target.aimPoint(entity, tickDelta, settings().aimOffset);
+        Vec3d eye = camera.mode() == CameraMode.ACOMPANAR ? aim.add(camera.offset()) : camera.pos();
+        return CameraPose.lookAt(eye, aim);
+    }
+
+    /** El zoom con el que se dibuja el monitor de una camara. */
+    public float previewZoom(int index) {
+        CameraPoint camera = at(index);
+        return camera == null ? 1.0f : camera.zoom();
     }
 
     /** Suavizado de entrada y salida, para que el travelling no arranque de golpe. */
@@ -564,12 +627,28 @@ public final class CameraDirector {
 
     public void beginFrame() {
         frameCounter++;
+        previewFrame = -1;
         cameraFrame = canBroadcast() && mirror.hasFrame()
                 && (frameCounter % settings().frameRatio == 0L);
+        if (cameraFrame || !mirror.hasFrame()) {
+            return;
+        }
+        // Uno de cada cuatro frames que no son de emision se dedica a refrescar el
+        // monitor de una camara, rotando entre todas. Con nueve camaras a 60 fps
+        // cada monitor se renueva un par de veces por segundo.
+        if (previewsWanted && (MinecraftClient.getInstance().world != null || selfTestPreviews)
+                && frameCounter % 4L == 1L) {
+            List<CameraPoint> list = cameras();
+            if (!list.isEmpty()) {
+                previewCursor = (previewCursor + 1) % list.size();
+                previewFrame = previewCursor;
+            }
+        }
     }
 
     public void endFrame() {
         cameraFrame = false;
+        previewFrame = -1;
     }
 
     /**
@@ -590,7 +669,12 @@ public final class CameraDirector {
                 }
                 return;
             }
-            if (cameraFrame) {
+            if (previewFrame >= 0) {
+                // El monitor no va a la emision: se guarda reducido y tu ventana
+                // recupera tu ultimo frame para que no parpadee.
+                previews.capture(previewFrame, framebuffer);
+                mirror.present();
+            } else if (cameraFrame) {
                 window.present(framebuffer);
                 mirror.present();
             } else {
@@ -607,6 +691,8 @@ public final class CameraDirector {
     // ------------------------------------------------------------- autoprueba
 
     private boolean selfTestPresenting;
+    /** Permite refrescar monitores sin mundo cargado, solo para la autoprueba. */
+    public boolean selfTestPreviews;
     private int selfTestFrames;
 
     public void setSelfTestPresenting(boolean value) {
@@ -636,5 +722,6 @@ public final class CameraDirector {
     public void shutdown() {
         window.close();
         mirror.close();
+        previews.close();
     }
 }

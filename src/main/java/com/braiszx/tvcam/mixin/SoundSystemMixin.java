@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class SoundSystemMixin {
     @Inject(method = "updateListenerPosition", at = @At("HEAD"), cancellable = true)
     private void tvcam$keepEarsOnPlayer(Camera camera, CallbackInfo ci) {
-        if (CameraDirector.get().isCameraFrame()) {
+        if (CameraDirector.get().isBroadcastFrame()) {
             ci.cancel();
         }
     }

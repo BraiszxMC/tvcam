@@ -24,7 +24,7 @@ public abstract class CameraMixin {
     private void tvcam$override(World world, Entity focusedEntity, boolean thirdPerson,
                                 boolean inverseView, float tickDelta, CallbackInfo ci) {
         CameraDirector director = CameraDirector.get();
-        if (!director.isCameraFrame()) {
+        if (!director.isBroadcastFrame()) {
             return;
         }
         CameraPose pose = director.poseFor(tickDelta);

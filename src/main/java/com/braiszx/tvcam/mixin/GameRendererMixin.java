@@ -16,7 +16,7 @@ public class GameRendererMixin {
     /** La mano y el objeto que llevas no salen en la emision. */
     @Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
     private void tvcam$noHand(float tickDelta, boolean sleeping, Matrix4f projection, CallbackInfo ci) {
-        if (CameraDirector.get().isCameraFrame()) {
+        if (CameraDirector.get().isBroadcastFrame()) {
             ci.cancel();
         }
     }
@@ -26,10 +26,12 @@ public class GameRendererMixin {
     private void tvcam$zoom(Camera camera, float tickDelta, boolean changingFov,
                             CallbackInfoReturnable<Float> cir) {
         CameraDirector director = CameraDirector.get();
-        if (!director.isCameraFrame()) {
+        if (!director.isBroadcastFrame()) {
             return;
         }
-        float zoom = director.currentZoom();
+        float zoom = director.isPreviewFrame()
+                ? director.previewZoom(director.previewIndex())
+                : director.currentZoom();
         if (zoom <= 0.0f || Math.abs(zoom - 1.0f) < 0.001f) {
             return;
         }

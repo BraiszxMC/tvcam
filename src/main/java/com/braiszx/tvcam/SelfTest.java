@@ -42,6 +42,11 @@ public final class SelfTest {
                     CameraDirector.get().cameras().add(demo("Grada", CameraMode.FIJA, TargetSpec.none(), 1.0f));
                     CameraDirector.get().cameras().add(demo("Sigue a Braiszx", CameraMode.ACOMPANAR, TargetSpec.player("Braiszx"), 1.0f));
                 }
+                // La escala 4 del entorno de pruebas no se parece a la de un
+                // equipo real: se fuerza a 2 para ver la mesa como se vera.
+                client.options.getGuiScale().setValue(2);
+                client.onResolutionChanged();
+                CameraDirector.get().selfTestPreviews = true;
                 client.setScreen(new DeskScreen(false));
                 TVCam.LOGGER.info("[selftest] mesa de realizacion abierta");
             } else if (ticks == 215) {
@@ -53,6 +58,15 @@ public final class SelfTest {
                 CameraDirector.get().window().requestCapture(
                         java.nio.file.Path.of(System.getProperty("tvcam.selftest.capture",
                                 "tvcam-selftest.png")));
+            } else if (ticks == 250) {
+                int conImagen = 0;
+                for (int i = 0; i < CameraDirector.get().cameras().size(); i++) {
+                    if (CameraDirector.get().previews().hasImage(i)) {
+                        conImagen++;
+                    }
+                }
+                TVCam.LOGGER.info("[selftest] monitores con imagen: {} de {}", conImagen,
+                        CameraDirector.get().cameras().size());
             } else if (ticks == 255) {
                 TVCam.LOGGER.info("[selftest] espejo del frame: {}",
                         CameraDirector.get().selfTestMirror());
