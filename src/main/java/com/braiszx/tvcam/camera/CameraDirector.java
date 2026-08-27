@@ -5,19 +5,24 @@ import com.braiszx.tvcam.render.CameraWindow;
 import com.braiszx.tvcam.render.FrameMirror;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
+import net.minecraft.entity.Entity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
 
 /**
- * El realizador: sabe que camaras hay, cual esta al aire y decide que frames se
- * dibujan desde la camara en vez de desde los ojos del jugador.
+ * El realizador: que camaras hay, cual esta al aire, a quien enfocan, como se
+ * pasa de una a otra y que frames se dibujan desde la camara en vez de desde los
+ * ojos del jugador.
  *
- * <p>El truco de esta beta es no renderizar el mundo dos veces por frame (que es
- * lo que cuesta la mitad de los FPS), sino alternar: un frame para tu ventana y
- * el siguiente para la ventana de camara. Cada ventana va a la mitad de FPS pero
- * el coste total es practicamente el de jugar normal.
+ * <p>El juego dibuja un solo frame por vuelta en un unico framebuffer, asi que
+ * para tener dos imagenes distintas hay que elegir: renderizar el mundo dos veces
+ * (y perder la mitad de los FPS) o repartir los frames. TVCam reparte: 1 de cada
+ * N frames se dibuja desde la camara y se presenta en la ventana de camara, el
+ * resto se dibujan normal y van a la ventana del juego.
  */
 public final class CameraDirector {
     private static final CameraDirector INSTANCE = new CameraDirector();
@@ -29,15 +34,44 @@ public final class CameraDirector {
     private final CameraStore store = new CameraStore();
     private final CameraWindow window = new CameraWindow();
     private final FrameMirror mirror = new FrameMirror();
+    private final TargetTracker target = new TargetTracker();
 
-    /** Indice de la camara al aire, o -1 si no hay ninguna. */
     private int active = -1;
-    /** true mientras se dibuja un frame que va a la ventana de camara. */
     private boolean cameraFrame;
-    private boolean hideGuiBackup;
+    private boolean hudHiddenBackup;
     private long frameCounter;
 
+    /** Pose y zoom con los que se esta dibujando la emision ahora mismo. */
+    private CameraPose current;
+    private float currentZoom = 1.0f;
+    private boolean followInitialized;
+    private long lastPoseNanos;
+
+    /** Travelling en curso al cambiar de camara. */
+    private CameraPose transitionFrom;
+    private float transitionFromZoom = 1.0f;
+    private long transitionStartNanos;
+    private long transitionEndNanos;
+
+    private long lastCutNanos;
+
     private CameraDirector() {
+    }
+
+    public TVCamSettings settings() {
+        return store.settings();
+    }
+
+    public void saveSettings() {
+        store.save();
+    }
+
+    public TargetTracker target() {
+        return target;
+    }
+
+    public CameraWindow window() {
+        return window;
     }
 
     // ---------------------------------------------------------------- camaras
@@ -60,7 +94,6 @@ public final class CameraDirector {
         return store.get(worldKey());
     }
 
-    /** Crea una camara donde esta el jugador ahora mismo, mirando a donde mira. */
     public CameraPoint addHere(String name) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) {
@@ -68,13 +101,9 @@ public final class CameraDirector {
         }
         List<CameraPoint> list = cameras();
         String finalName = (name == null || name.isBlank()) ? "Camara " + (list.size() + 1) : name;
-        CameraPoint point = new CameraPoint(
-                finalName,
-                client.player.getX(),
-                client.player.getEyeY(),
-                client.player.getZ(),
-                client.player.getYaw(),
-                client.player.getPitch());
+        CameraPoint point = CameraPoint.fixed(finalName,
+                new Vec3d(client.player.getX(), client.player.getEyeY(), client.player.getZ()),
+                client.player.getYaw(), client.player.getPitch());
         list.add(point);
         store.save();
         return point;
@@ -108,8 +137,24 @@ public final class CameraDirector {
         return active;
     }
 
+    public boolean replace(int index, CameraPoint camera) {
+        List<CameraPoint> list = cameras();
+        if (index < 0 || index >= list.size()) {
+            return false;
+        }
+        list.set(index, camera);
+        store.save();
+        return true;
+    }
+
+    // ------------------------------------------------------------------ cortes
+
     /** Corta a la camara indicada (0-based). -1 apaga la emision. */
     public void cut(int index) {
+        cut(index, false);
+    }
+
+    private void cut(int index, boolean automatic) {
         List<CameraPoint> list = cameras();
         if (index < 0) {
             active = -1;
@@ -120,12 +165,31 @@ public final class CameraDirector {
             feedback(Text.literal("TVCam: no hay camara " + (index + 1)).formatted(Formatting.RED));
             return;
         }
+        startTransition();
         active = index;
+        lastCutNanos = System.nanoTime();
         CameraPoint point = list.get(index);
-        feedback(Text.literal("TVCam: al aire " + (index + 1) + " - " + point.name()).formatted(Formatting.AQUA));
+        if (!automatic) {
+            feedback(Text.literal("TVCam: al aire " + (index + 1) + " - " + point.name())
+                    .formatted(Formatting.AQUA));
+        }
         if (!window.isOpen()) {
             window.open();
         }
+    }
+
+    /** Congela la pose actual como origen del travelling hacia la camara nueva. */
+    private void startTransition() {
+        int millis = settings().transitionMillis;
+        followInitialized = false;
+        if (millis <= 0 || current == null || active < 0) {
+            transitionEndNanos = 0L;
+            return;
+        }
+        transitionFrom = current;
+        transitionFromZoom = currentZoom;
+        transitionStartNanos = System.nanoTime();
+        transitionEndNanos = transitionStartNanos + millis * 1_000_000L;
     }
 
     private void feedback(Text text) {
@@ -135,11 +199,149 @@ public final class CameraDirector {
         }
     }
 
-    // ---------------------------------------------------------------- ventana
+    // ------------------------------------------------------------------ poses
 
-    public CameraWindow window() {
-        return window;
+    /**
+     * Donde y hacia donde mira la emision en este frame. Aqui es donde el modo de
+     * la camara, el seguimiento del objetivo y el travelling se convierten en una
+     * sola pose.
+     */
+    public CameraPose poseFor(float tickDelta) {
+        CameraPoint camera = activeCamera();
+        if (camera == null) {
+            return null;
+        }
+        long now = System.nanoTime();
+        double deltaSeconds = lastPoseNanos == 0L ? 0.05 : (now - lastPoseNanos) / 1_000_000_000.0;
+        lastPoseNanos = now;
+        deltaSeconds = Math.clamp(deltaSeconds, 0.0, 0.5);
+
+        CameraPose desired = desiredPose(camera, tickDelta, deltaSeconds);
+        float zoom = camera.zoom();
+
+        if (now < transitionEndNanos && transitionFrom != null) {
+            float progress = (float) (now - transitionStartNanos)
+                    / (float) (transitionEndNanos - transitionStartNanos);
+            float eased = ease(MathHelper.clamp(progress, 0.0f, 1.0f));
+            current = CameraPose.lerp(transitionFrom, desired, eased);
+            currentZoom = MathHelper.lerp(eased, transitionFromZoom, zoom);
+        } else {
+            current = desired;
+            currentZoom = zoom;
+        }
+        return current;
     }
+
+    /** Suavizado de entrada y salida, para que el travelling no arranque de golpe. */
+    private static float ease(float t) {
+        return t * t * (3.0f - 2.0f * t);
+    }
+
+    private CameraPose desiredPose(CameraPoint camera, float tickDelta, double deltaSeconds) {
+        CameraPose fixed = new CameraPose(camera.pos(), camera.yaw(), camera.pitch());
+        if (!camera.mode().needsTarget()) {
+            return fixed;
+        }
+        Entity entity = target.resolve();
+        if (entity == null) {
+            // Sin objetivo, la camara se queda quieta donde la pusiste en vez de
+            // ponerse a mirar al vacio.
+            return fixed;
+        }
+        Vec3d aim = target.aimPoint(entity, tickDelta, settings().aimOffset);
+        Vec3d eye = camera.mode() == CameraMode.ACOMPANAR ? aim.add(camera.offset()) : camera.pos();
+        CameraPose wanted = CameraPose.lookAt(eye, aim);
+
+        if (!followInitialized) {
+            followInitialized = true;
+            return wanted;
+        }
+
+        double response = settings().followResponse();
+        if (response == Double.MAX_VALUE) {
+            return wanted;
+        }
+        // Acercamiento exponencial: independiente de los FPS y sin rebote.
+        float blend = (float) (1.0 - Math.exp(-response * deltaSeconds));
+        CameraPose previous = current != null ? current : wanted;
+        return new CameraPose(
+                previous.pos().lerp(wanted.pos(), blend),
+                CameraPose.lerpAngle(previous.yaw(), wanted.yaw(), blend),
+                MathHelper.lerp(blend, previous.pitch(), wanted.pitch()));
+    }
+
+    public float currentZoom() {
+        return currentZoom;
+    }
+
+    // ------------------------------------------------------- realizador automatico
+
+    /** Llamado una vez por tick: decide si toca cortar a otra camara. */
+    public void tickAutoDirector() {
+        TVCamSettings config = settings();
+        if (!config.autoDirector || active < 0 || !window.isOpen()) {
+            return;
+        }
+        Entity entity = target.resolve();
+        if (entity == null) {
+            return;
+        }
+        long minimum = (long) (config.autoMinShotSeconds * 1_000_000_000L);
+        if (System.nanoTime() - lastCutNanos < minimum) {
+            return;
+        }
+        int best = pickBestCamera(entity.getBoundingBox().getCenter());
+        if (best >= 0 && best != active) {
+            cut(best, true);
+        }
+    }
+
+    /**
+     * Elige el plano que mejor cuenta la jugada: ni pegado ni en la otra punta del
+     * campo, y con el objetivo dentro del encuadre si la camara no puede girar.
+     */
+    private int pickBestCamera(Vec3d targetPos) {
+        List<CameraPoint> list = cameras();
+        int best = -1;
+        double bestScore = -Double.MAX_VALUE;
+        for (int i = 0; i < list.size(); i++) {
+            CameraPoint camera = list.get(i);
+            Vec3d eye = camera.mode() == CameraMode.ACOMPANAR
+                    ? targetPos.add(camera.offset()) : camera.pos();
+            double distance = eye.distanceTo(targetPos);
+            if (distance < 3.0 || distance > 120.0) {
+                continue;
+            }
+            double score = -Math.abs(distance - 22.0);
+            if (!camera.mode().needsTarget()) {
+                // Una camara que no gira solo sirve si la jugada le entra en el plano.
+                double off = angleFromView(camera, targetPos);
+                if (off > 55.0) {
+                    continue;
+                }
+                score -= off * 0.35;
+            }
+            if (i == active) {
+                // Un pelin de inercia, para no cortar de ida y vuelta entre dos planos
+                // casi igual de buenos.
+                score += 4.0;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    private static double angleFromView(CameraPoint camera, Vec3d targetPos) {
+        CameraPose wanted = CameraPose.lookAt(camera.pos(), targetPos);
+        double yawOff = Math.abs(MathHelper.wrapDegrees(wanted.yaw() - camera.yaw()));
+        double pitchOff = Math.abs(MathHelper.wrapDegrees(wanted.pitch() - camera.pitch()));
+        return Math.max(yawOff, pitchOff);
+    }
+
+    // ---------------------------------------------------------------- ventana
 
     public void toggleWindow() {
         if (window.isOpen()) {
@@ -151,7 +353,6 @@ public final class CameraDirector {
 
     // ----------------------------------------------------------------- frames
 
-    /** true si el frame que se esta dibujando ahora va a la ventana de camara. */
     public boolean isCameraFrame() {
         return cameraFrame;
     }
@@ -165,31 +366,28 @@ public final class CameraDirector {
                 && client.currentScreen == null;
     }
 
-    /** Llamado al principio de cada frame del juego. */
     public void beginFrame() {
         frameCounter++;
-        cameraFrame = canBroadcast() && mirror.hasFrame() && (frameCounter % 2L == 0L);
+        cameraFrame = canBroadcast() && mirror.hasFrame()
+                && (frameCounter % settings().frameRatio == 0L);
         if (cameraFrame) {
             MinecraftClient client = MinecraftClient.getInstance();
-            hideGuiBackup = client.options.hudHidden;
+            hudHiddenBackup = client.options.hudHidden;
             client.options.hudHidden = true;
         }
     }
 
-    /** Llamado al final de cada frame del juego. */
     public void endFrame() {
         if (cameraFrame) {
-            MinecraftClient.getInstance().options.hudHidden = hideGuiBackup;
+            MinecraftClient.getInstance().options.hudHidden = hudHiddenBackup;
             cameraFrame = false;
         }
     }
 
     /**
-     * Llamado justo antes de que el juego presente el frame en tu ventana.
-     *
-     * <p>Si el frame era de camara lo mandamos a la ventana de camara y devolvemos
-     * a tu ventana tu ultimo frame, para que no parpadee entre las dos vistas. Si
-     * el frame era tuyo, lo guardamos para poder repetirlo en el siguiente.
+     * Justo antes de que el juego presente el frame en tu ventana: si era un frame
+     * de camara lo mandamos a la ventana de camara y devolvemos el tuyo a la tuya,
+     * para que no parpadee entre las dos vistas.
      */
     public void beforePresent() {
         MinecraftClient client = MinecraftClient.getInstance();

@@ -1,7 +1,7 @@
 package com.braiszx.tvcam.mixin;
 
 import com.braiszx.tvcam.camera.CameraDirector;
-import com.braiszx.tvcam.camera.CameraPoint;
+import com.braiszx.tvcam.camera.CameraPose;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** En los frames de camara, mueve el punto de vista a la camara al aire. */
+/** En los frames de camara, mueve el punto de vista a donde diga el realizador. */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
     @Shadow
@@ -27,11 +27,11 @@ public abstract class CameraMixin {
         if (!director.isCameraFrame()) {
             return;
         }
-        CameraPoint point = director.activeCamera();
-        if (point == null) {
+        CameraPose pose = director.poseFor(tickDelta);
+        if (pose == null) {
             return;
         }
-        setRotation(point.yaw(), point.pitch());
-        setPos(point.x(), point.y(), point.z());
+        setRotation(pose.yaw(), pose.pitch());
+        setPos(pose.pos().x, pose.pos().y, pose.pos().z);
     }
 }

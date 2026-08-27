@@ -11,5 +11,9 @@
   "key.tvcam.cut.9": "Cortar a camara 9",
   "key.tvcam.stop": "Parar la emision",
   "key.tvcam.add": "Crear camara aqui",
-  "key.tvcam.window": "Abrir/cerrar ventana de camara"
+  "key.tvcam.window": "Abrir/cerrar ventana de camara",
+  "key.tvcam.zoom_in": "Acercar zoom",
+  "key.tvcam.zoom_out": "Alejar zoom",
+  "key.tvcam.lock": "Marcar objetivo al que apuntas",
+  "key.tvcam.auto": "Realizador automatico"
 }

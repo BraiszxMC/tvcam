@@ -1,6 +1,8 @@
 package com.braiszx.tvcam.render;
 
 import com.braiszx.tvcam.TVCam;
+import com.braiszx.tvcam.camera.CameraDirector;
+import com.braiszx.tvcam.camera.TVCamSettings;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.texture.GlTexture;
@@ -65,6 +67,24 @@ public final class CameraWindow {
         return handle;
     }
 
+    /** Cambia el tamano de la ventana de camara, que es lo que acaba capturando OBS. */
+    public void resize(int width, int height) {
+        if (isOpen()) {
+            GLFW.glfwSetWindowSize(handle, width, height);
+        }
+    }
+
+    /** Tamano actual de la ventana, o null si no esta abierta. */
+    public int[] size() {
+        if (!isOpen()) {
+            return null;
+        }
+        int[] width = new int[1];
+        int[] height = new int[1];
+        GLFW.glfwGetFramebufferSize(handle, width, height);
+        return new int[] {width[0], height[0]};
+    }
+
     // ------------------------------------------------------------------ ciclo
 
     public void open() {
@@ -83,7 +103,9 @@ public final class CameraWindow {
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUS_ON_SHOW, GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUSED, GLFW.GLFW_FALSE);
 
-        handle = GLFW.glfwCreateWindow(1280, 720, "TVCam", 0L, mainWindow);
+        TVCamSettings settings = CameraDirector.get().settings();
+        handle = GLFW.glfwCreateWindow(settings.windowWidth, settings.windowHeight,
+                "TVCam", 0L, mainWindow);
         if (handle == 0L) {
             TVCam.LOGGER.error("GLFW no pudo crear la ventana de camara");
             return;

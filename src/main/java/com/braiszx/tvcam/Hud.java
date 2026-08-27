@@ -1,13 +1,15 @@
 package com.braiszx.tvcam;
 
 import com.braiszx.tvcam.camera.CameraDirector;
+import com.braiszx.tvcam.camera.CameraMode;
 import com.braiszx.tvcam.camera.CameraPoint;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 
-/** Un aviso pequeno en tu ventana (no en la emision) de que camara esta al aire. */
+/** Un aviso en tu ventana (nunca en la emision) de que plano esta al aire. */
 public final class Hud {
     private static final int RED = 0xFFFF5555;
+    private static final int GREY = 0xFFBBBBBB;
 
     private Hud() {
     }
@@ -23,8 +25,20 @@ public final class Hud {
                 return;
             }
             MinecraftClient client = MinecraftClient.getInstance();
-            String label = "● AL AIRE  CAM " + (director.activeIndex() + 1) + " · " + camera.name();
-            context.drawTextWithShadow(client.textRenderer, label, 6, 6, RED);
+            String live = "● AL AIRE  CAM " + (director.activeIndex() + 1) + " · " + camera.name();
+            context.drawTextWithShadow(client.textRenderer, live, 6, 6, RED);
+
+            StringBuilder detail = new StringBuilder(camera.mode().name().toLowerCase());
+            if (camera.zoom() > 1.01f) {
+                detail.append(String.format("  ·  zoom x%.2f", camera.zoom()));
+            }
+            if (camera.mode() != CameraMode.FIJA) {
+                detail.append("  ·  ").append(director.target().describe());
+            }
+            if (director.settings().autoDirector) {
+                detail.append("  ·  auto");
+            }
+            context.drawTextWithShadow(client.textRenderer, detail.toString(), 6, 18, GREY);
         });
     }
 }
