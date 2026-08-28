@@ -46,6 +46,13 @@ public final class CameraDirector {
     private int active = -1;
     private boolean cameraFrame;
     private boolean hudHiddenBackup;
+    /**
+     * true si en este frame se ha dibujado el mundo de verdad. Al perder el foco o
+     * con un menu abierto, el juego se salta el render y el framebuffer se queda
+     * con lo ultimo que hubiera: sin esta comprobacion, a OBS le llegaba tu vista
+     * con el menu de pausa encima.
+     */
+    private boolean worldRendered;
     /** Camara cuya miniatura se esta dibujando en este frame, o -1. */
     private int previewFrame = -1;
     /** Cuantas camaras quieren miniatura (la mesa abierta las pide). */
@@ -655,6 +662,7 @@ public final class CameraDirector {
     public void beginFrame() {
         frameCounter++;
         previewFrame = -1;
+        worldRendered = false;
         // Con rafaga 1 esto es alternar uno a uno; subiendola, cada vista se lleva
         // varios frames seguidos, que es lo que necesitan los shaders temporales.
         long block = frameCounter / Math.max(1, settings().frameBurst);
@@ -698,20 +706,37 @@ public final class CameraDirector {
      * Decide que se presenta en la ventana del jugador. Devuelve true si TVCam ya
      * se ha encargado y el juego no debe presentar su framebuffer.
      */
+    /** El juego acaba de dibujar el mundo en este frame. */
+    public void markWorldRendered() {
+        worldRendered = true;
+    }
+
     public boolean presentToPlayerWindow(Framebuffer framebuffer) {
         try {
             if (previewFrame >= 0) {
                 // El mundo ya se ha dibujado dentro del monitor: no hay nada que
                 // copiar. Tu ventana repite tu ultima imagen para que no parpadee.
-                previews.markDrawn(previewFrame);
+                if (worldRendered) {
+                    previews.markDrawn(previewFrame);
+                }
                 return mirror.present();
             }
             selfTestPresent();
             if (cameraFrame) {
+                if (!worldRendered) {
+                    // Frame sin mundo dibujado (fuera de foco, menu abierto): la
+                    // ventana de emision se queda con su ultima imagen buena en vez
+                    // de enseñar tu pantalla con el menu encima.
+                    return mirror.present();
+                }
                 // Al final del frame: el plano lleva ya los rotulos del HUD y
                 // ninguna pantalla, que se quedan fuera de los frames de camara.
                 window.present(framebuffer);
                 return mirror.present();
+            }
+            if (!worldRendered) {
+                // Tampoco se guarda como "tu ultimo frame" algo que no lleva mundo.
+                return false;
             }
             mirror.capture(framebuffer);
             return false;

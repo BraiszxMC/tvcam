@@ -8,6 +8,7 @@
     "FramebufferMixin",
     "GameRendererMixin",
     "InGameHudMixin",
+    "InactivityFpsLimiterMixin",
     "MinecraftClientMixin",
     "ScreenMixin",
     "SoundSystemMixin"

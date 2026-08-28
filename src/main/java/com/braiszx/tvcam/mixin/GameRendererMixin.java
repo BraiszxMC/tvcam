@@ -3,6 +3,7 @@ package com.braiszx.tvcam.mixin;
 import com.braiszx.tvcam.camera.CameraDirector;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.RenderTickCounter;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -19,6 +20,12 @@ public class GameRendererMixin {
         if (CameraDirector.get().isBroadcastFrame()) {
             ci.cancel();
         }
+    }
+
+    /** Deja constancia de que en este frame si se ha dibujado el mundo. */
+    @Inject(method = "renderWorld", at = @At("RETURN"))
+    private void tvcam$worldRendered(RenderTickCounter tickCounter, CallbackInfo ci) {
+        CameraDirector.get().markWorldRendered();
     }
 
     /** El zoom se hace estrechando el campo de vision, como un teleobjetivo real. */

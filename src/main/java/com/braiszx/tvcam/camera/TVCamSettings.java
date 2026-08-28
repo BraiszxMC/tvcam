@@ -54,6 +54,12 @@ public final class TVCamSettings {
     /** El texto grande que sale al marcar. Vacio = no se canta el gol. */
     public String goalText = "GOL";
 
+    /**
+     * Mientras la ventana de emision este abierta, el juego no baja los FPS por
+     * tener un menu abierto, estar fuera de la ventana o llevar un rato quieto.
+     */
+    public boolean keepFpsWhileBroadcasting = true;
+
     /** Realizador automatico: corta solo a la camara que mejor ve la jugada. */
     public boolean autoDirector = false;
     /** Segundos minimos que aguanta un plano antes de que el realizador corte a otro. */
