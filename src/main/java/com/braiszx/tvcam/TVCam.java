@@ -30,6 +30,7 @@ public class TVCam implements ClientModInitializer {
         Keybinds.register();
         Commands.register();
         Hud.register();
+        com.braiszx.tvcam.net.RemoteControl.register();
         if ("1".equals(System.getenv("TVCAM_SELFTEST"))) {
             SelfTest.register();
         }

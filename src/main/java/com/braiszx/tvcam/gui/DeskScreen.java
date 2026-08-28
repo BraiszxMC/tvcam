@@ -5,6 +5,7 @@ import com.braiszx.tvcam.camera.CameraMode;
 import com.braiszx.tvcam.camera.CameraPoint;
 import com.braiszx.tvcam.camera.TargetSpec;
 import com.braiszx.tvcam.camera.TargetTracker;
+import com.braiszx.tvcam.net.RemoteControl;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -30,6 +31,7 @@ public final class DeskScreen extends Screen {
     private final boolean openedByWand;
     private TextFieldWidget nameField;
     private TextFieldWidget goalField;
+    private TextFieldWidget codeField;
     private int page;
 
     public DeskScreen(boolean openedByWand) {
@@ -72,7 +74,8 @@ public final class DeskScreen extends Screen {
         int gridRight = panelX - 12;
         int busTop = height - 78;
 
-        buildMultiviewer(cameras, gridLeft, gridTop, gridRight - gridLeft, busTop - gridTop - 84);
+        buildMultiviewer(cameras, gridLeft, gridTop, gridRight - gridLeft, busTop - gridTop - 110);
+        buildRemoteBar(gridLeft, busTop - 94, gridRight - gridLeft);
         buildGoalBar(gridLeft, busTop - 68, gridRight - gridLeft);
         buildGeneralBar(gridLeft, busTop - 40, gridRight - gridLeft);
         buildProgramBus(cameras, gridLeft, busTop, gridRight - gridLeft);
@@ -96,7 +99,11 @@ public final class DeskScreen extends Screen {
 
         // El monitor de programa se lleva algo menos de la mitad del ancho.
         int programWidth = Math.clamp(width * 42 / 100, 120, 260);
-        int programHeight = Math.min(height, programWidth * 9 / 16 + 14);
+        int programHeight = programWidth * 9 / 16 + 14;
+        if (programHeight > height) {
+            programHeight = Math.max(30, height);
+            programWidth = Math.max(60, (programHeight - 14) * 16 / 9);
+        }
         if (live >= 0 && live < cameras.size()) {
             addDrawableChild(new MonitorTile(x, y, programWidth, programHeight, live,
                     () -> select(live), () -> select(live), true));
@@ -150,6 +157,15 @@ public final class DeskScreen extends Screen {
             }
         }
 
+        // Si ni una fila entra en el sitio disponible, se encoge el monitor hasta
+        // que quepa: antes se dibujaba a tamaño entero y se comia lo de abajo.
+        if (tileHeight > height) {
+            tileHeight = Math.max(24, height);
+            tileWidth = Math.max(48, (tileHeight - 12) * 16 / 9);
+            columns = Math.max(1, (width + gap) / (tileWidth + gap));
+            rows = 1;
+        }
+
         int perPage = columns * rows;
         int pages = Math.max(1, (rest.size() + perPage - 1) / perPage);
         page = Math.clamp(page, 0, pages - 1);
@@ -182,26 +198,44 @@ public final class DeskScreen extends Screen {
     }
 
     /** El bus de programa: una tecla por camara, como la fila de un mezclador. */
+    /** El plano al aire: el tuyo, o el del anfitrion si le estas manejando tu. */
+    private static int liveIndex() {
+        RemoteControl remote = RemoteControl.get();
+        return remote.role() == RemoteControl.Role.OPERADOR
+                ? remote.remoteActive() : CameraDirector.get().activeIndex();
+    }
+
     private void buildProgramBus(List<CameraPoint> cameras, int x, int y, int width) {
         CameraDirector director = CameraDirector.get();
-        int count = Math.max(1, Math.min(cameras.size(), 9));
+        RemoteControl remote = RemoteControl.get();
+        int available = remote.role() == RemoteControl.Role.OPERADOR
+                ? remote.remoteCameras().size() : cameras.size();
+        int count = Math.max(1, Math.min(available, 9));
         int gap = 4;
         int keyWidth = Math.min(52, (width - gap * count) / Math.max(count + 1, 4));
         int keyX = x;
         for (int i = 0; i < count; i++) {
             int index = i;
             addDrawableChild(new ConsoleButton(keyX, y, keyWidth, 26, String.valueOf(i + 1), () -> {
-                director.cut(index);
-                select(index);
-            }).compact().accent(Console.TALLY).lit(() -> director.activeIndex() == index)
+                if (RemoteControl.get().role() == RemoteControl.Role.OPERADOR) {
+                    RemoteControl.get().requestCut(index);
+                } else {
+                    director.cut(index);
+                    select(index);
+                }
+            }).compact().accent(Console.TALLY).lit(() -> liveIndex() == index)
                     .help("Pone la camara " + (i + 1) + " al aire. Tambien con el "
                             + (i + 1) + " del teclado numerico."));
             keyX += keyWidth + gap;
         }
         addDrawableChild(new ConsoleButton(keyX + 8, y, 46, 26, "NEGRO", () -> {
-            director.cut(-1);
+            if (RemoteControl.get().role() == RemoteControl.Role.OPERADOR) {
+                RemoteControl.get().requestCut(-1);
+            } else {
+                director.cut(-1);
+            }
             rebuild();
-        }).compact().lit(() -> director.activeIndex() < 0)
+        }).compact().lit(() -> liveIndex() < 0)
                 .help("Corta la emision: la ventana TVCam deja de seguir a ninguna camara."));
     }
 
@@ -325,6 +359,77 @@ public final class DeskScreen extends Screen {
             cursor += row + gap + 8;
         }
 
+    }
+
+    /**
+     * Manejar entre varios las mismas camaras. Quien las tiene pide un codigo y lo
+     * reparte; los demas lo escriben aqui y ya pueden cortar de plano.
+     */
+    private void buildRemoteBar(int x, int y, int width) {
+        RemoteControl remote = RemoteControl.get();
+        int gap = 5;
+        int buttonWidth = (width - gap * 3) / 4;
+
+        switch (remote.role()) {
+            case SOLO -> {
+                addDrawableChild(new ConsoleButton(x, y, buttonWidth, 20, "COMPARTIR", () -> {
+                    remote.share();
+                    rebuild();
+                }).compact().accent(Console.OK)
+                        .help("Pide un codigo para que otros puedan manejar TUS camaras desde "
+                                + "su Minecraft. Hace falta el plugin TVCamRelay en el servidor."));
+
+                codeField = new TextFieldWidget(textRenderer, x + buttonWidth + gap, y,
+                        buttonWidth, 20, Text.literal("Codigo"));
+                codeField.setMaxLength(8);
+                codeField.setPlaceholder(Text.literal("codigo..."));
+                addDrawableChild(codeField);
+
+                addDrawableChild(new ConsoleButton(x + (buttonWidth + gap) * 2, y, buttonWidth, 20,
+                        "UNIRME", () -> {
+                            remote.join(codeField == null ? "" : codeField.getText());
+                            rebuild();
+                        }).compact()
+                        .help("Escribe a la izquierda el codigo que te hayan pasado y pulsa aqui "
+                                + "para manejar las camaras de esa persona."));
+            }
+            case ANFITRION -> {
+                addDrawableChild(new ConsoleButton(x, y, buttonWidth * 2 + gap, 20, "", () -> { })
+                        .compact().accent(Console.OK).lit(() -> true)
+                        .label(() -> "CODIGO: " + remote.code())
+                        .help("Pasa este codigo a quien quieras que maneje tus camaras."));
+                addDrawableChild(new ConsoleButton(x + (buttonWidth + gap) * 2, y, buttonWidth, 20,
+                        "DEJAR DE COMPARTIR", () -> {
+                            remote.leave();
+                            rebuild();
+                        }).compact().accent(Console.TALLY)
+                        .help("Cierra la emision compartida: los demas dejan de mandar."));
+            }
+            case OPERADOR -> {
+                addDrawableChild(new ConsoleButton(x, y, buttonWidth * 2 + gap, 20, "", () -> { })
+                        .compact().lit(() -> true)
+                        .label(() -> "MANEJANDO A " + remote.hostName().toUpperCase())
+                        .help("Estas moviendo las camaras de otra persona: lo que pulses le "
+                                + "llega a el, que es quien tiene la ventana de OBS."));
+                addDrawableChild(new ConsoleButton(x + (buttonWidth + gap) * 2, y, buttonWidth, 20,
+                        "SALIR", () -> {
+                            remote.leave();
+                            rebuild();
+                        }).compact().accent(Console.TALLY)
+                        .help("Dejar de manejar las camaras de esa persona."));
+            }
+        }
+
+        String info = switch (remote.role()) {
+            case SOLO -> remote.status().isEmpty()
+                    ? "Nadie mas maneja tus camaras." : remote.status();
+            case ANFITRION -> remote.operators().isEmpty()
+                    ? "Nadie se ha unido todavia."
+                    : "Contigo: " + String.join(", ", remote.operators());
+            case OPERADOR -> remote.remoteCameras().size() + " camaras de " + remote.hostName();
+        };
+        addDrawableChild(new ConsoleButton(x + (buttonWidth + gap) * 3, y, buttonWidth, 20, "",
+                () -> { }).compact().label(() -> info).help(info));
     }
 
     /** El rotulo que sale al marcar: se escribe aqui y se prueba al momento. */

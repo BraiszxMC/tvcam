@@ -1,0 +1,13 @@
+name: TVCamRelay
+version: '${version}'
+main: com.braiszx.tvcamrelay.TVCamRelay
+api-version: '1.21'
+description: Deja que varias personas manejen las camaras de TVCam de otra, mediante un codigo.
+authors: [BraiszxMC]
+permissions:
+  tvcam.host:
+    description: Puede compartir sus camaras y repartir el codigo.
+    default: true
+  tvcam.join:
+    description: Puede unirse a las camaras de otro con un codigo.
+    default: true

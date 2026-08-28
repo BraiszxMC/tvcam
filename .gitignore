@@ -4,3 +4,5 @@ run/
 *.log
 .idea/
 *.iml
+plugin/build/
+plugin/.gradle/

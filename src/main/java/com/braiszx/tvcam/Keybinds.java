@@ -89,6 +89,7 @@ public final class Keybinds {
             }
             tickWand(client);
 
+            com.braiszx.tvcam.net.RemoteControl.get().publishState(false);
             director.tickBroadcast();
             director.tickAutoDirector();
         });

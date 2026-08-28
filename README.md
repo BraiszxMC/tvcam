@@ -236,6 +236,32 @@ giren, aprietan cuando la jugada se va lejos.
 
 ---
 
+## Manejar las camaras entre varios
+
+Una persona tiene las camaras y la ventana de OBS: es el **anfitrion**. Los demas
+se unen con un codigo y pueden cortar de plano desde su propio Minecraft.
+
+**Hace falta el plugin `TVCamRelay` en el servidor** (carpeta `plugin/` de este
+repositorio, compilado contra Paper 1.21.7). El servidor solo hace de centralita:
+no sabe nada de camaras ni de video, solo lleva las ordenes de un lado a otro. Sin
+el plugin, el mod sigue funcionando como siempre para ti solo.
+
+1. El anfitrion abre la mesa (**M**) y pulsa **COMPARTIR**. Sale un codigo de seis
+   letras.
+2. Los demas escriben ese codigo en la mesa y pulsan **UNIRME**.
+3. A partir de ahi ven la lista de camaras del anfitrion y pueden ponerlas al aire
+   con las teclas de PROGRAMA o el numpad.
+
+**Lo que viaja son ordenes, no video**: el operador ve los nombres de las camaras y
+cual esta al aire, pero no las imagenes. Mandar video por el servidor seria otro
+proyecto entero, y ademas la emision la sigue sacando el anfitrion, que es quien
+tiene el OBS.
+
+Permisos del plugin: `tvcam.host` para compartir y `tvcam.join` para unirse, los
+dos activos por defecto.
+
+---
+
 ## Como se usa
 
 1. Entra al mundo, ponte donde quieras la camara mirando hacia donde quieras.
