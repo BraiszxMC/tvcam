@@ -21,8 +21,10 @@ import net.minecraft.util.math.Vec3d;
  * objetivo desaparece, lo volvemos a buscar solo.
  */
 public final class TargetTracker {
-    /** Cada cuantos ticks se reintenta encontrar la pelota si se ha perdido. */
+    /** Cada cuantos ticks se vuelve a mirar cual es la pelota buena. */
     private static final int REACQUIRE_TICKS = 10;
+    /** Si la pelota que seguiamos se va mas lejos que esto, se busca otra mas cerca. */
+    private static final double STICKY_RANGE = 60.0;
     /** Angulo maximo, en grados, para considerar que estas apuntando a una entidad. */
     private static final double LOCK_ON_CONE_DEGREES = 6.0;
     private static final double LOCK_ON_RANGE = 160.0;
@@ -151,9 +153,19 @@ public final class TargetTracker {
         return entity != null && !entity.isRemoved() ? entity : null;
     }
 
+    /**
+     * La pelota: por defecto, <b>la mas cercana que se vea</b>. No hace falta
+     * marcar ningun campo. Solo si has marcado uno se limita la busqueda a el, que
+     * es lo util cuando tienes varios campos pegados.
+     *
+     * <p>Se mantiene la que ya seguia mientras siga cerca, para que no vaya
+     * saltando entre dos pelotas parecidas, pero si desaparece (gol) o se va muy
+     * lejos, se coge la de al lado sin mas.
+     */
     private Entity resolveBall(ClientWorld world, MinecraftClient client) {
+        Vec3d from = client.player != null ? client.player.getEntityPos() : Vec3d.ZERO;
         Entity current = valid(world.getEntityById(ballEntityId));
-        if (current != null) {
+        if (current != null && current.getEntityPos().distanceTo(from) < STICKY_RANGE) {
             return current;
         }
         // La pelota anterior ya no existe (gol, reinicio de partida...): buscamos otra,
@@ -163,12 +175,12 @@ public final class TargetTracker {
         }
         ticksSinceSearch = 0;
         Field field = CameraDirector.get().activeField();
-        Vec3d from = field != null ? field.center()
-                : (client.player != null ? client.player.getEntityPos() : Vec3d.ZERO);
-        Entity found = findBall(world, from, field);
+        Entity found = findBall(world, field != null ? field.center() : from, field);
         if (found != null) {
             ballEntityId = found.getId();
-            TVCam.LOGGER.info("Pelota encontrada (entidad {})", ballEntityId);
+        } else if (current != null) {
+            // No hay nada mejor: seguimos con la que teniamos aunque este lejos.
+            return current;
         }
         return found;
     }

@@ -82,6 +82,9 @@ public final class Commands {
                         .then(literal("smooth").then(argument("valor", IntegerArgumentType.integer(0, 100))
                                 .executes(c -> smooth(c.getSource(),
                                         IntegerArgumentType.getInteger(c, "valor")))))
+                        .then(literal("burst").then(argument("n", IntegerArgumentType.integer(1, 20))
+                                .executes(c -> burst(c.getSource(),
+                                        IntegerArgumentType.getInteger(c, "n")))))
                         .then(literal("ratio").then(argument("n", IntegerArgumentType.integer(2, 10))
                                 .executes(c -> ratio(c.getSource(),
                                         IntegerArgumentType.getInteger(c, "n")))))
@@ -355,6 +358,16 @@ public final class Commands {
         CameraDirector.get().settings().frameRatio = n;
         CameraDirector.get().saveSettings();
         source.sendFeedback(Text.literal("1 de cada " + n + " frames va a la emision")
+                .formatted(Formatting.AQUA));
+        return 1;
+    }
+
+    private static int burst(FabricClientCommandSource source, int n) {
+        CameraDirector.get().settings().frameBurst = n;
+        CameraDirector.get().saveSettings();
+        source.sendFeedback(Text.literal(n == 1
+                        ? "Se alterna frame a frame entre tu vista y la emision"
+                        : n + " frames seguidos para cada vista (ayuda con los shaders)")
                 .formatted(Formatting.AQUA));
         return 1;
     }

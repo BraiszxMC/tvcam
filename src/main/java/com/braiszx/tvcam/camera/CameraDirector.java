@@ -10,7 +10,10 @@ import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.entity.Entity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.MathHelper;
+import net.minecraft.world.RaycastContext;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.List;
@@ -543,15 +546,11 @@ public final class CameraDirector {
         if (!config.autoDirector || active < 0 || !window.isOpen()) {
             return;
         }
-        Entity entity = target.resolve();
-        if (entity == null) {
-            return;
-        }
         long minimum = (long) (config.autoMinShotSeconds * 1_000_000_000L);
         if (System.nanoTime() - lastCutNanos < minimum) {
             return;
         }
-        int best = pickBestCamera(entity.getBoundingBox().getCenter());
+        int best = pickBestCamera();
         if (best >= 0 && best != active) {
             cut(best, true);
         }
@@ -561,16 +560,31 @@ public final class CameraDirector {
      * Elige el plano que mejor cuenta la jugada: ni pegado ni en la otra punta del
      * campo, y con el objetivo dentro del encuadre si la camara no puede girar.
      */
-    private int pickBestCamera(Vec3d targetPos) {
+    private int pickBestCamera() {
         List<CameraPoint> list = cameras();
         int best = -1;
         double bestScore = -Double.MAX_VALUE;
         for (int i = 0; i < list.size(); i++) {
             CameraPoint camera = list.get(i);
+            if (camera.autoSkip) {
+                // Camara reservada: solo sale al aire si la pones tu a mano.
+                continue;
+            }
+            // Cada camara puntua con SU objetivo, no con el comun: si una sigue a
+            // un jugador y otra la pelota, cada una se juzga por lo suyo.
+            Entity entity = target.resolve(camera.target());
+            if (entity == null) {
+                continue;
+            }
+            Vec3d targetPos = entity.getBoundingBox().getCenter();
             Vec3d eye = camera.mode() == CameraMode.ACOMPANAR
                     ? targetPos.add(camera.offset()) : camera.pos();
             double distance = eye.distanceTo(targetPos);
             if (distance < 3.0 || distance > 120.0) {
+                continue;
+            }
+            if (!canSee(eye, targetPos)) {
+                // Sin linea de vision se cortaba a planos que solo enseñaban un muro.
                 continue;
             }
             double score = -Math.abs(distance - 22.0);
@@ -593,6 +607,18 @@ public final class CameraDirector {
             }
         }
         return best;
+    }
+
+    /** Si desde la camara se ve el objetivo o hay bloques por medio. */
+    private static boolean canSee(Vec3d eye, Vec3d targetPos) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.world == null) {
+            return true;
+        }
+        BlockHitResult hit = client.world.raycast(new RaycastContext(eye, targetPos,
+                RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE,
+                client.player));
+        return hit == null || hit.getType() == HitResult.Type.MISS;
     }
 
     private static double angleFromView(CameraPoint camera, Vec3d targetPos) {
@@ -629,8 +655,11 @@ public final class CameraDirector {
     public void beginFrame() {
         frameCounter++;
         previewFrame = -1;
+        // Con rafaga 1 esto es alternar uno a uno; subiendola, cada vista se lleva
+        // varios frames seguidos, que es lo que necesitan los shaders temporales.
+        long block = frameCounter / Math.max(1, settings().frameBurst);
         cameraFrame = canBroadcast() && mirror.hasFrame()
-                && (frameCounter % settings().frameRatio == 0L);
+                && (block % settings().frameRatio == 0L);
         if (cameraFrame) {
             hideHud();
         }

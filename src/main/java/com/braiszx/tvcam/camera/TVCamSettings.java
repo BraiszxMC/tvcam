@@ -9,6 +9,14 @@ public final class TVCamSettings {
     /** 1 de cada N frames va a la ventana de camara. 2 = mitad y mitad. */
     public int frameRatio = 2;
 
+    /**
+     * Cuantos frames seguidos se le dan a cada vista antes de cambiar. 1 alterna
+     * uno a uno, que es lo mas fluido. Subirlo ayuda con los shaders: los efectos
+     * que reaprovechan el frame anterior necesitan varios frames de la misma vista
+     * para asentarse.
+     */
+    public int frameBurst = 1;
+
     /** Duracion del travelling al cambiar de camara, en milisegundos. 0 = corte seco. */
     public int transitionMillis = 700;
 
@@ -55,6 +63,7 @@ public final class TVCamSettings {
         windowWidth = Math.clamp(windowWidth, 320, 7680);
         windowHeight = Math.clamp(windowHeight, 180, 4320);
         frameRatio = Math.clamp(frameRatio, 2, 10);
+        frameBurst = Math.clamp(frameBurst, 1, 20);
         transitionMillis = Math.clamp(transitionMillis, 0, 10000);
         smoothing = Math.clamp(smoothing, 0, 100);
         aimOffset = Math.clamp(aimOffset, -5.0, 5.0);

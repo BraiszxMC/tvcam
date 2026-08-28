@@ -35,6 +35,13 @@ public final class CameraPoint {
     /** null = usa el ajuste general. 0-100. */
     public Integer smoothing;
 
+    /**
+     * true = el realizador automatico no corta nunca a esta camara. Tu si puedes
+     * ponerla al aire a mano. Sirve para tener planos de recurso guardados que no
+     * quieres que salgan solos.
+     */
+    public boolean autoSkip;
+
     public CameraPoint() {
     }
 
@@ -116,6 +123,7 @@ public final class CameraPoint {
         copy.target = target().copy();
         copy.autoZoom = autoZoom;
         copy.smoothing = smoothing;
+        copy.autoSkip = autoSkip;
         return copy;
     }
 

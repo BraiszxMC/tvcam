@@ -215,7 +215,7 @@ public final class DeskScreen extends Screen {
         // interfaz: se calcula el alto de fila a partir del sitio que hay, en vez
         // de anclar unos controles arriba y otros abajo y que se pisen.
         int gap = 3;
-        int totalRows = camera == null ? 1 : 9;
+        int totalRows = camera == null ? 1 : 10;
         int available = height - 12;
         int row = Math.clamp(available / Math.max(1, totalRows) - gap, 10, 18);
         int half = (width - gap) / 2;
@@ -300,6 +300,17 @@ public final class DeskScreen extends Screen {
                 }
                 rebuild();
             }).compact().help("Baja esta camara en la lista: cambia su numero y su tecla del numpad."));
+            cursor += row + gap;
+
+            addDrawableChild(new ConsoleButton(x, cursor, width, row, "", () -> {
+                camera.autoSkip = !camera.autoSkip;
+                director.touch();
+            }).label(() -> "Auto la usa: " + (camera.autoSkip ? "NO" : "SI"))
+                    .lit(() -> camera.autoSkip)
+                    .accent(Console.TALLY)
+                    .help("En 'NO la usa', el realizador automatico no cortara nunca a esta "
+                            + "camara, pero tu si puedes ponerla al aire a mano. Para planos "
+                            + "de recurso que no quieres que salgan solos."));
             cursor += row + gap;
 
             addDrawableChild(new ConsoleButton(x, cursor, half, row, "COPIAR", () -> {
