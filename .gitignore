@@ -6,3 +6,9 @@ run/
 *.iml
 plugin/build/
 plugin/.gradle/
+
+# Skills de agentes instaladas con "npx skills add": son de terceros y no
+# forman parte del plugin.
+.agents/
+.claude/
+skills-lock.json
