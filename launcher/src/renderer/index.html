@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; img-src 'self' https://cdn.discordapp.com data:; style-src 'self'; script-src 'self';" />
+  <title>TVCam Launcher</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Fondo: manchas de lapislazuli que se mueven despacio detras del cristal -->
+  <div class="backdrop" aria-hidden="true">
+    <span class="blob blob-a"></span>
+    <span class="blob blob-b"></span>
+    <span class="blob blob-c"></span>
+    <span class="grain"></span>
+  </div>
+
+  <header class="titlebar">
+    <div class="titlebar-name">TVCam&nbsp;<span>Launcher</span></div>
+    <div class="titlebar-buttons">
+      <button id="btn-minimize" class="win-btn" title="Minimizar" aria-label="Minimizar">
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 5h8" /></svg>
+      </button>
+      <button id="btn-close" class="win-btn win-btn-close" title="Cerrar" aria-label="Cerrar">
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7" /></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="glass card">
+      <div class="card-sheen" aria-hidden="true"></div>
+
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span class="cube"></span>
+        </div>
+        <h1 class="brand-title">TVCam Launcher</h1>
+        <p class="brand-sub" id="studio-line">Estudio de eventos</p>
+      </div>
+
+      <p class="lede">Inicia sesion con Discord para continuar.</p>
+
+      <button id="btn-discord" class="discord-btn">
+        <svg class="discord-logo" viewBox="0 0 24 18" aria-hidden="true">
+          <path d="M20.32 1.51A19.8 19.8 0 0 0 15.43 0l-.24.44c1.63.4 2.9 1 4.1 1.76a13.9 13.9 0 0 0-11.3-.44c.4-.15.83-.29 1.27-.4l-.2-.36A19.8 19.8 0 0 0 3.68 1.5C.6 6.1-.24 10.57.18 14.98a19.9 19.9 0 0 0 6.05 3.02l1.2-1.9c-.66-.24-1.3-.54-1.9-.9l.47-.35a14.2 14.2 0 0 0 12.1 0l.46.35c-.6.36-1.23.66-1.9.9l1.2 1.9a19.9 19.9 0 0 0 6.06-3.02c.5-5.1-.85-9.53-3.6-13.47ZM8.02 12.33c-1.18 0-2.15-1.08-2.15-2.4 0-1.33.95-2.41 2.15-2.41 1.2 0 2.17 1.09 2.15 2.4 0 1.33-.95 2.41-2.15 2.41Zm7.96 0c-1.18 0-2.15-1.08-2.15-2.4 0-1.33.95-2.41 2.15-2.41 1.2 0 2.17 1.09 2.15 2.4 0 1.33-.95 2.41-2.15 2.41Z" />
+        </svg>
+        <span class="discord-btn-label">Iniciar sesion con Discord</span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+
+      <p class="status" id="status" role="status"></p>
+
+      <div class="account" id="account" hidden>
+        <img class="account-avatar" id="account-avatar" alt="" />
+        <div class="account-text">
+          <strong id="account-name"></strong>
+          <span id="account-tag"></span>
+        </div>
+        <span class="account-check" aria-hidden="true">&#10003;</span>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span id="version">beta</span>
+      <span class="dot" aria-hidden="true"></span>
+      <span>No oficial &middot; no afiliado a Mojang ni a Microsoft</span>
+    </footer>
+  </main>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "tvcam-launcher",
+  "productName": "TVCam Launcher",
+  "version": "0.1.0-beta",
+  "description": "Launcher de Minecraft (beta) para el estudio de eventos TVCam",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder"
+  },
+  "author": "BraiszxMC",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.tvcam.launcher",
+    "productName": "TVCam Launcher",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage", "category": "Game" },
+    "mac": { "target": "dmg" }
+  }
+}
