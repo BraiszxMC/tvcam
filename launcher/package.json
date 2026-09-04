@@ -22,8 +22,16 @@
       "src/**/*",
       "package.json"
     ],
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage", "category": "Game" },
-    "mac": { "target": "dmg" }
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Game"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "publish": null
   }
 }

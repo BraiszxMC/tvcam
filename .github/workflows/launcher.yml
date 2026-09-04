@@ -78,10 +78,10 @@ jobs:
             node --check "$f"
           done
 
+      # --publish never: electron-builder solo empaqueta. Publicar la release
+      # es cosa de launcher-release.yml.
       - name: Compilar
-        run: npm run dist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run dist -- --publish never
 
       - uses: actions/upload-artifact@v4
         with:
