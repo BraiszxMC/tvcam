@@ -64,7 +64,28 @@ Se usa el *implicit grant* de Discord, asi que **no hace falta client secret**
 Se comprueba el parametro `state` y el token se queda solo en memoria: **no se
 guarda en disco**.
 
-## Compilar un ejecutable
+## Descargar una version compilada
+
+Cada push que toca `launcher/` lanza el workflow **Launcher**, que compila el
+instalador de Windows y el AppImage de Linux. Se descargan desde la pestaña
+**Actions** del repositorio: abre el run y mira en *Artifacts* (caducan a los
+30 dias).
+
+Para un link de descarga permanente, publica una release con un tag:
+
+```bash
+git tag launcher-v0.1.0-beta
+git push origin launcher-v0.1.0-beta
+```
+
+El workflow **Launcher release** compila y adjunta los instaladores a
+https://github.com/BraiszxMC/tvcam/releases
+
+Si defines la variable `DISCORD_CLIENT_ID` en *Settings → Secrets and variables
+→ Actions → Variables* (y opcionalmente `DISCORD_GUILD_ID`), las builds salen ya
+configuradas y quien las descargue no tiene que tocar nada.
+
+## Compilar un ejecutable a mano
 
 ```bash
 npm run dist

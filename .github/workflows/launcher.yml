@@ -1,0 +1,91 @@
+name: Launcher
+
+# Compila el launcher para Windows y Linux y deja los instaladores como
+# artifacts del run (pestaña Actions -> el run -> Artifacts, caducan a los
+# 30 dias). Para un link de descarga permanente, empuja un tag launcher-v*
+# y lo publica launcher-release.yml, que reutiliza este mismo workflow.
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/launcher*.yml'
+  pull_request:
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/launcher*.yml'
+  workflow_dispatch:
+  workflow_call:
+
+defaults:
+  run:
+    working-directory: launcher
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+            artifact: launcher-windows
+            files: |
+              launcher/dist/*.exe
+              launcher/dist/*.exe.blockmap
+          - os: ubuntu-latest
+            name: Linux
+            artifact: launcher-linux
+            files: launcher/dist/*.AppImage
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: launcher/package-lock.json
+
+      - run: npm ci
+
+      # El Client ID de Discord no esta en el repo. Si lo defines en
+      # Settings -> Secrets and variables -> Actions -> Variables como
+      # DISCORD_CLIENT_ID (y opcionalmente DISCORD_GUILD_ID), la build sale
+      # ya configurada. Si no, el launcher arranca y avisa de que falta.
+      - name: Preparar launcher.config.json
+        if: vars.DISCORD_CLIENT_ID != ''
+        shell: bash
+        env:
+          CLIENT_ID: ${{ vars.DISCORD_CLIENT_ID }}
+          GUILD_ID: ${{ vars.DISCORD_GUILD_ID }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const cfg = JSON.parse(fs.readFileSync("launcher.config.example.json", "utf8"));
+            cfg.discordClientId = process.env.CLIENT_ID;
+            cfg.requiredGuildId = process.env.GUILD_ID || "";
+            fs.writeFileSync("launcher.config.json", JSON.stringify(cfg, null, 2) + "\n");
+          '
+
+      - name: Comprobar sintaxis
+        shell: bash
+        run: |
+          for f in src/main.js src/preload.js src/config.js src/discord-auth.js src/renderer/renderer.js; do
+            node --check "$f"
+          done
+
+      - name: Compilar
+        run: npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 30
